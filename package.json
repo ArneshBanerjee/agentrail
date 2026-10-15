@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "check": "npm run typecheck && npm test",
-    "typecheck": "tsc -p packages/core && tsc -p packages/sdk && tsc -p packages/server && tsc -p packages/web",
+    "typecheck": "tsc -p packages/core && tsc -p packages/sdk && tsc -p packages/server && tsc -p packages/web && tsc -p examples/ledgerly",
     "test": "vitest run",
     "dev": "node scripts/dev.mjs",
     "build": "npm run build -w @agentrail/web",

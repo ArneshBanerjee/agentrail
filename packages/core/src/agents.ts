@@ -51,7 +51,7 @@ export const AGENTS: readonly AgentRule[] = [
     operator: 'OpenAI',
     surface: 'terminal',
     kind: 'agent',
-    userAgent: [/\bcodex_cli_rs\//i, /\bcodex-cli\//i],
+    userAgent: [/\bcodex_cli_rs\//i, /\bcodex-cli\//i, /^codex\//i],
     mcpClients: ['codex', 'codex-mcp-client'],
   },
   {

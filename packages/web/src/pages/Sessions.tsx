@@ -54,7 +54,9 @@ export const Sessions = () => {
             <span className="row-flex" style={{ flexWrap: 'nowrap', minWidth: 0 }}>
               <AgentIcon name={s.agent.name} />
               <span style={{ minWidth: 0 }}>
-                <div className={`intent ${s.intent ? '' : 'faint'}`}>{s.intent ?? 'No intent yet'}</div>
+                <div className={`intent ${s.intent ? '' : 'faint'}`} title={s.intent ? undefined : s.inferredIntent ? 'Inferred from the pages it read' : undefined}>
+                  {s.intent ?? (s.inferredIntent ? `${s.inferredIntent} (inferred)` : 'No intent yet')}
+                </div>
                 <div className="sub">{s.host ?? ''}</div>
               </span>
             </span>
@@ -139,7 +141,13 @@ export const Sessions = () => {
                     <AgentIcon name={s.agent.name} />
                   </td>
                   <td className="small" style={{ maxWidth: 380 }}>
-                    {s.intent ? s.intent : <span className="faint">No intent</span>}
+                    {s.intent ? s.intent : s.inferredIntent ? (
+                      <span className="muted" title="Inferred from the pages it read">
+                        {s.inferredIntent} <span className="chip inferred">inferred</span>
+                      </span>
+                    ) : (
+                      <span className="faint">No intent</span>
+                    )}
                     {s.stoppedBy && !s.live ? <div className="down small mono">{s.stoppedBy.detail}</div> : null}
                   </td>
                   <td className="small" style={{ whiteSpace: 'nowrap' }}>
@@ -195,7 +203,17 @@ export const Session = ({ id }: { id: string }) => {
             <Clock ms={data.durationMs} live={data.live} />
           </span>
         </div>
-        <div className="bigquote">{data.intent ? `“${data.intent}”` : <span className="faint">No intent yet</span>}</div>
+        <div className="bigquote">
+          {data.intent ? (
+            `“${data.intent}”`
+          ) : data.inferredIntent ? (
+            <span className="muted">
+              {data.inferredIntent} <span className="chip inferred">inferred from pages read</span>
+            </span>
+          ) : (
+            <span className="faint">No intent yet</span>
+          )}
+        </div>
         <div className="muted small">
           via {data.discovery.via} · {time(data.startedAt)}
         </div>

@@ -49,6 +49,11 @@ export type Session = {
   readonly discovery: Discovery
   readonly landingPath?: string
   readonly intent?: string
+  /**
+   * When the agent stated no task: the docs it read, as a guess at the task. Kept apart from
+   * `intent` so intent groups and their numbers only count what agents said.
+   */
+  readonly inferredIntent?: string
   readonly searches: readonly string[]
   /** Step id to the time it was reached. */
   readonly reached: Readonly<Record<string, number>>
@@ -293,6 +298,26 @@ export const findBlockers = (events: readonly StoredEvent[]): Blocker[] => {
   return blockers.sort((a, b) => a.at - b.at)
 }
 
+/** Pages every journey reads, which say nothing about the task. */
+const GENERIC_PAGE = /^\/docs\/?$|^\/docs\/(quickstart|getting-started|introduction|overview|index|sign-?in|login|auth(entication)?|api-?keys?|keys|cli|sdk)\/?$/i
+
+/** "/docs/billing/usage-based" becomes "Billing › Usage based". */
+export const inferIntent = (events: readonly StoredEvent[]): string | undefined => {
+  const pages = events.filter((e) => e.kind === 'request' && (e.method ?? 'GET') === 'GET' && (e.status ?? 200) < 400 && /^\/docs\/./.test(e.path ?? '') && !GENERIC_PAGE.test(e.path ?? ''))
+  const page = pages[0]?.path
+  if (!page) return undefined
+  return page
+    .replace(/^\/docs\//, '')
+    .replace(/\.(md|mdx|html)$/, '')
+    .split('/')
+    .filter(Boolean)
+    .map((part) => {
+      const words = part.replace(/[-_]+/g, ' ')
+      return words.charAt(0).toUpperCase() + words.slice(1)
+    })
+    .join(' › ')
+}
+
 const toSession = (events: readonly StoredEvent[], agent: Attribution, funnel: readonly FunnelStep[]): Session => {
   const first = events[0]!
   const last = events.at(-1)!
@@ -307,6 +332,7 @@ const toSession = (events: readonly StoredEvent[], agent: Attribution, funnel: r
   const accountIds = [...new Set(events.flatMap((e) => (e.accountId ? [e.accountId] : [])))]
   const landing = events.find((e) => e.kind === 'request' && e.path)?.path
   const intent = events.find((e) => e.kind === 'intent' && e.text)?.text
+  const inferredIntent = intent ? undefined : inferIntent(events)
   const searches = events.flatMap((e) => {
     const s = searchText(e)
     return s ? [s] : []
@@ -324,6 +350,7 @@ const toSession = (events: readonly StoredEvent[], agent: Attribution, funnel: r
     discovery: discover(first),
     ...(landing ? { landingPath: landing } : {}),
     ...(intent ? { intent } : {}),
+    ...(inferredIntent ? { inferredIntent } : {}),
     searches,
     reached,
     ...(stoppedAt ? { stoppedAt } : {}),

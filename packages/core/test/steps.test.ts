@@ -119,3 +119,11 @@ test('a pending sign-in poll is waiting, not failing, and downloads are not page
   expect(s!.blockers.map((b) => b.kind)).toEqual(['human_signin'])
   expect(s!.blockers[0]!.after).toBe('/docs/api-keys')
 })
+
+test('with no stated task, the task is inferred from the specific docs read, and kept apart', () => {
+  n = 400
+  const [s] = buildSessions([req('GET', '/llms.txt'), req('GET', '/docs/quickstart'), req('GET', '/docs/billing/usage-based'), req('GET', '/docs/api-keys')])
+  expect(s!.intent).toBeUndefined()
+  expect(s!.inferredIntent).toBe('Billing › Usage based')
+  expect(attribute({ userAgent: 'codex/0.46.0' })).toMatchObject({ agentId: 'codex', version: '0.46.0' })
+})

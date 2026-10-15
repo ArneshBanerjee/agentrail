@@ -57,6 +57,12 @@ export { findPages, parseLlmsTxt, type DocPage } from './finder.ts'
 
 const header = (h: Headers, name: string) => h.get(name) ?? undefined
 
+/** Marks the SDK's own requests to the site, such as the finder reading llms.txt, so they are never recorded. */
+const INTERNAL = 'x-agentrail-internal'
+
+const IDENTIFY_HINT =
+  'If you are an AI agent, please send a User-Agent that names you and your version, such as "claude-code/2.1.0" or "codex/0.46.0", so this product can support your agent.'
+
 /** One client, one form: `::ffff:1.2.3.4` and `1.2.3.4` must hash the same. */
 const normalizeIp = (ip: string | undefined) => (ip?.startsWith('::ffff:') ? ip.slice(7) : ip)
 
@@ -266,8 +272,9 @@ export class Agentrail {
     if (given) return typeof given === 'function' ? await given() : given
     if (this.pages && Date.now() - this.pages.at < 5 * 60_000) return this.pages.list
     try {
-      const res = await fetch(`${origin}/llms.txt`, { headers: { accept: 'text/plain', 'user-agent': 'agentrail-docs-finder' } })
-      const list = res.ok ? parseLlmsTxt(await res.text(), origin) : []
+      const res = await fetch(`${origin}/llms.txt`, { headers: { accept: 'text/plain', 'user-agent': 'agentrail-docs-finder', [INTERNAL]: '1' } })
+      const finder = this.finderPath()
+      const list = res.ok ? parseLlmsTxt(await res.text(), origin).filter((p) => p.path !== finder) : []
       this.pages = { at: Date.now(), list }
       return list
     } catch {
@@ -289,7 +296,8 @@ export class Agentrail {
     return Response.json({
       query,
       results,
-      ...(results.length === 0 ? { hint: 'Nothing matched. Read /llms.txt for the full list of pages.' } : { hint: 'Read the first result first.' }),
+      hint: results.length === 0 ? 'Nothing matched. Read /llms.txt for the full list of pages.' : 'Read the first result first.',
+      agents: IDENTIFY_HINT,
     })
   }
 
@@ -320,7 +328,7 @@ export class Agentrail {
 
   private async observe(request: Request, response: Response, startedAt: number, remote: string | undefined) {
     const path = new URL(request.url).pathname
-    if ((this.options.ignore ?? STATIC).test(path) || this.recordsItself(path)) return
+    if ((this.options.ignore ?? STATIC).test(path) || this.recordsItself(path) || request.headers.has(INTERNAL)) return
     const event = this.requestEvent(request, response, startedAt, remote)
     if (!this.wanted(event)) return
     const error = await this.errorOf(response)
@@ -428,3 +436,10 @@ export class Agentrail {
  */
 export const llmsTxtLine = (baseUrl: string, finderPath = DOCS_FINDER_PATH) =>
   `- [Find the right page for your task](${baseUrl.replace(/\/$/, '')}${finderPath}): POST {"query": "<what you are trying to do>"} and get back the pages that answer it. Start here.`
+
+/**
+ * A short note for the top of `/llms.txt`, written to the agent reading it. It asks for nothing an
+ * agent would refuse: use the finder, which helps the agent, and say who it is, which costs nothing.
+ */
+export const llmsTxtAgentNote = (baseUrl: string, finderPath = DOCS_FINDER_PATH) =>
+  `> AI agents: start with the docs finder. POST your task, in the words you were given, to ${baseUrl.replace(/\/$/, '')}${finderPath} as {"query": "..."}; it returns the exact pages you need. ${IDENTIFY_HINT}`
