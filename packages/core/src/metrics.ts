@@ -80,7 +80,9 @@ export const breakdown = (
     .sort((a, b) => b.revenue - a.revenue || b.sessions - a.sessions || a.label.localeCompare(b.label))
 }
 
-export const byAgent = (s: Session) => ({ key: s.agent.agentId, label: s.agent.name })
+/** Agents nobody could name are one row. The Agents page splits them by behaviour. */
+export const byAgent = (s: Session) =>
+  s.agent.agentId.startsWith('unnamed:') ? { key: 'unnamed', label: 'Unnamed' } : { key: s.agent.agentId, label: s.agent.name }
 export const byLandingPage = (s: Session) => (s.landingPath ? { key: s.landingPath, label: s.landingPath } : undefined)
 export const bySurface = (s: Session) => ({ key: s.agent.surface, label: s.agent.surface })
 export const byDiscovery = (s: Session) => ({ key: s.discovery.via, label: s.discovery.via })

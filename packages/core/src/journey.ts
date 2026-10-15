@@ -27,6 +27,8 @@ export type Blocker = {
   readonly path?: string
   readonly status?: number
   readonly tool?: string
+  /** The last page the agent read before this happened. Usually the page a fix must edit. */
+  readonly after?: string
 }
 
 export type Discovery = {
@@ -233,17 +235,22 @@ const searchText = (e: StoredEvent): string | undefined => {
 export const findBlockers = (events: readonly StoredEvent[]): Blocker[] => {
   const blockers: Blocker[] = []
   const signinStarted: StoredEvent[] = []
+  let lastRead: string | undefined
+  const push = (b: Blocker) => blockers.push(lastRead ? { ...b, after: lastRead } : b)
   for (const e of events) {
     const path = e.path ? normalizePath(e.path) : undefined
     if (e.kind === 'request' && e.status !== undefined && e.status >= 400) {
       const api = looksLikeApi(e.path ?? '', e.host)
       if (e.status === 404 && !api) {
-        blockers.push({ kind: 'not_found', key: `not_found:${path}`, at: e.ts, eventId: e.id, detail: `${path} returned 404`, ...(path ? { path } : {}), status: 404 })
+        push({ kind: 'not_found', key: `not_found:${path}`, at: e.ts, eventId: e.id, detail: `${path} returned 404`, ...(path ? { path } : {}), status: 404 })
       } else if (api || e.status >= 500 || e.method !== 'GET') {
         const method = e.method ?? 'GET'
-        blockers.push({
+        // One wrong header in one guide fails every endpoint an agent tries. Auth failures with the
+        // same error are one problem, whatever the endpoint.
+        const auth = (e.status === 401 || e.status === 403) && e.error
+        push({
           kind: 'failed_call',
-          key: `failed_call:${method} ${path}:${e.status}`,
+          key: auth ? `failed_call:auth:${e.status}:${e.error}` : `failed_call:${method} ${path}:${e.status}`,
           at: e.ts,
           eventId: e.id,
           detail: `${method} ${path} returned ${e.status}${e.error ? `: ${e.error}` : ''}`,
@@ -257,22 +264,23 @@ export const findBlockers = (events: readonly StoredEvent[]): Blocker[] => {
       e.accept && /text\/(?:x-)?markdown/i.test(e.accept) && !/text\/html/i.test(e.accept.split(',')[0] ?? '') &&
       e.contentType && /text\/html/i.test(e.contentType)
     ) {
-      blockers.push({ kind: 'markdown_served_html', key: `markdown_served_html:${path}`, at: e.ts, eventId: e.id, detail: `Asked for markdown at ${path} and got HTML`, ...(path ? { path } : {}) })
+      push({ kind: 'markdown_served_html', key: `markdown_served_html:${path}`, at: e.ts, eventId: e.id, detail: `Asked for markdown at ${path} and got HTML`, ...(path ? { path } : {}) })
     }
     if (e.kind === 'step' && e.ok === false) {
-      blockers.push({ kind: 'failed_call', key: `failed_step:${e.step}`, at: e.ts, eventId: e.id, detail: `${e.step} failed${e.error ? `: ${e.error}` : ''}` })
+      push({ kind: 'failed_call', key: `failed_step:${e.step}`, at: e.ts, eventId: e.id, detail: `${e.step} failed${e.error ? `: ${e.error}` : ''}` })
     }
     if (e.kind === 'mcp_tool' && (e.ok === false || e.error)) {
-      blockers.push({ kind: 'mcp_tool_error', key: `mcp_tool_error:${e.tool}`, at: e.ts, eventId: e.id, detail: `MCP tool ${e.tool} failed${e.error ? `: ${e.error}` : ''}`, ...(e.tool ? { tool: e.tool } : {}) })
+      push({ kind: 'mcp_tool_error', key: `mcp_tool_error:${e.tool}`, at: e.ts, eventId: e.id, detail: `MCP tool ${e.tool} failed${e.error ? `: ${e.error}` : ''}`, ...(e.tool ? { tool: e.tool } : {}) })
     }
     if (e.kind === 'payment' && e.ok === false) {
-      blockers.push({ kind: 'payment_failed', key: `payment_failed:${e.error ?? 'declined'}`, at: e.ts, eventId: e.id, detail: `Payment failed${e.error ? `: ${e.error}` : ''}` })
+      push({ kind: 'payment_failed', key: `payment_failed:${e.error ?? 'declined'}`, at: e.ts, eventId: e.id, detail: `Payment failed${e.error ? `: ${e.error}` : ''}` })
     }
     if (e.kind === 'step' && e.step === 'signin_started') signinStarted.push(e)
+    if (e.kind === 'request' && (e.method ?? 'GET') === 'GET' && (e.status ?? 200) < 400 && path) lastRead = path
     if (e.kind === 'step' && e.step === 'signed_in') signinStarted.length = 0
   }
   for (const e of signinStarted) {
-    blockers.push({ kind: 'human_signin', key: 'human_signin', at: e.ts, eventId: e.id, detail: 'Sign-in started and waited for a person' })
+    push({ kind: 'human_signin', key: 'human_signin', at: e.ts, eventId: e.id, detail: 'Sign-in started and waited for a person' })
   }
   return blockers.sort((a, b) => a.at - b.at)
 }

@@ -48,7 +48,7 @@ test('the summary shows the journey, its funnel, intent and the fix it needs', a
   expect(body.overview).toMatchObject({ sessions: 1, live: 1, withIntent: 1 })
   expect(body.funnel.map((r: any) => r.sessions)).toEqual([1, 1, 1, 1, 0, 0, 0])
   expect(body.agents[0]).toMatchObject({ label: 'Codex', sessions: 1 })
-  expect(body.fixes[0]).toMatchObject({ kind: 'failed_call', sessionsLost: 1, title: 'Agents fail auth on /v1/meters' })
+  expect(body.fixes[0]).toMatchObject({ kind: 'failed_call', sessionsLost: 1, title: 'Agents fail auth: X-Api-Key rejected', sourcePage: '/docs/billing/usage' })
 })
 
 test('sessions list and a session timeline', async () => {

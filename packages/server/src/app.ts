@@ -153,7 +153,7 @@ export const createApp = (deps: AppDeps) => {
     const limit = Math.min(Number(c.req.query('limit') ?? 100) || 100, 1000)
     const t = now()
     const list = a.sessions
-      .filter((s) => !agent || s.agent.agentId === agent || s.agent.name === agent)
+      .filter((s) => !agent || byAgent(s).key === agent || s.agent.agentId === agent)
       .filter((s) => !stoppedAt || s.stoppedAt === stoppedAt)
       .filter((s) => !blocker || s.blockers.some((b) => b.key === blocker))
       .filter((s) => !inIntent || inIntent.has(s.id))
@@ -182,20 +182,20 @@ export const createApp = (deps: AppDeps) => {
     const a = analyzer.analyze(workspaceId, windowOf(c))
     const step = store.settings(workspaceId).conversionStep
     const rows = breakdown(a.sessions, byAgent, step).map((row) => {
-      const mine = a.sessions.filter((s) => s.agent.agentId === row.key)
+      const mine = a.sessions.filter((s) => byAgent(s).key === row.key)
       const sample = mine[0]!.agent
       const labels: Record<string, number> = {}
-      const evidence = new Set<string>()
+      const evidence = new Map<string, number>()
       for (const s of mine) {
         labels[s.agent.label] = (labels[s.agent.label] ?? 0) + 1
-        evidence.add(s.agent.evidence)
+        evidence.set(s.agent.evidence, (evidence.get(s.agent.evidence) ?? 0) + 1)
       }
       return {
         ...row,
         operator: sample.operator,
         surface: sample.surface,
         labels,
-        evidence: [...evidence].slice(0, 5),
+        evidence: [...evidence.entries()].sort((x, y) => y[1] - x[1]).slice(0, 5).map(([text, sessions]) => ({ text, sessions })),
         discovery: breakdown(mine, byDiscovery, step).slice(0, 5),
       }
     })

@@ -16,6 +16,10 @@ export type FixCandidate = {
   readonly path?: string
   readonly tool?: string
   readonly status?: number
+  /** The page most of these agents read just before the problem. */
+  readonly sourcePage?: string
+  /** Endpoints or paths this problem showed up on. */
+  readonly paths: readonly string[]
   readonly sessionsLost: number
   /** Sessions that hit this blocker, whether or not it stopped them. */
   readonly sessionsAffected: number
@@ -40,7 +44,12 @@ export type Proposal = {
 const DAY = 86_400_000
 
 const TITLES: Record<BlockerKind, (b: Blocker) => string> = {
-  failed_call: (b) => (b.status === 401 || b.status === 403 ? `Agents fail auth on ${b.path ?? 'an API call'}` : `API call fails: ${b.detail}`),
+  failed_call: (b) =>
+    b.status === 401 || b.status === 403
+      ? b.key.startsWith('failed_call:auth:')
+        ? `Agents fail auth: ${b.detail.split(': ').slice(1).join(': ') || b.status}`
+        : `Agents fail auth on ${b.path ?? 'an API call'}`
+      : `API call fails: ${b.detail}`,
   not_found: (b) => `Agents look for ${b.path} and it does not exist`,
   markdown_served_html: (b) => `Markdown reader got HTML at ${b.path}`,
   mcp_tool_error: (b) => `MCP tool ${b.tool} fails`,
@@ -62,11 +71,13 @@ export const rankFixes = (sessions: readonly Session[], options: RankOptions): F
   const revenuePerConversion = converted.length === 0 ? 0 : converted.reduce((sum, s) => sum + s.revenue, 0) / converted.length
   const months = Math.max(options.windowMs, DAY) / (30 * DAY)
 
-  const groups = new Map<string, { blocker: Blocker; lost: Session[]; affected: Set<string> }>()
+  const groups = new Map<string, { blocker: Blocker; lost: Session[]; affected: Set<string>; after: Map<string, number>; paths: Set<string> }>()
   for (const s of sessions) {
     for (const b of s.blockers) {
-      const g = groups.get(b.key) ?? { blocker: b, lost: [], affected: new Set<string>() }
+      const g = groups.get(b.key) ?? { blocker: b, lost: [], affected: new Set<string>(), after: new Map<string, number>(), paths: new Set<string>() }
       g.affected.add(s.id)
+      if (b.after) g.after.set(b.after, (g.after.get(b.after) ?? 0) + 1)
+      if (b.path) g.paths.add(b.path)
       groups.set(b.key, g)
     }
     if (s.stoppedBy && !(conversionStep in s.reached)) groups.get(s.stoppedBy.key)?.lost.push(s)
@@ -82,6 +93,7 @@ export const rankFixes = (sessions: readonly Session[], options: RankOptions): F
     const byAgent: Record<string, number> = {}
     for (const s of g.lost) byAgent[s.agent.name] = (byAgent[s.agent.name] ?? 0) + 1
     const b = g.blocker
+    const sourcePage = [...g.after.entries()].sort((x, y) => y[1] - x[1])[0]?.[0]
     candidates.push({
       key,
       kind: b.kind,
@@ -90,6 +102,8 @@ export const rankFixes = (sessions: readonly Session[], options: RankOptions): F
       ...(b.path ? { path: b.path } : {}),
       ...(b.tool ? { tool: b.tool } : {}),
       ...(b.status ? { status: b.status } : {}),
+      ...(sourcePage ? { sourcePage } : {}),
+      paths: [...g.paths],
       sessionsLost: g.lost.length,
       sessionsAffected: g.affected.size,
       ...(beforeStep ? { beforeStep } : {}),
@@ -98,7 +112,7 @@ export const rankFixes = (sessions: readonly Session[], options: RankOptions): F
       monthlyValueAtRisk: Math.round((g.lost.length * conversionPast * revenuePerConversion) / months),
       sessionIds: g.lost.map((s) => s.id),
       byAgent,
-      proposal: propose(b, options.knownPaths ?? []),
+      proposal: propose(b, options.knownPaths ?? [], sourcePage),
     })
   }
   return candidates.sort(
@@ -136,7 +150,7 @@ export const closestPath = (missing: string, known: readonly string[]): string |
   return best?.path
 }
 
-const propose = (b: Blocker, knownPaths: readonly string[]): Proposal => {
+const propose = (b: Blocker, knownPaths: readonly string[], sourcePage: string | undefined): Proposal => {
   switch (b.kind) {
     case 'not_found': {
       const target = b.path ? closestPath(b.path, knownPaths) : undefined
@@ -156,8 +170,8 @@ const propose = (b: Blocker, knownPaths: readonly string[]): Proposal => {
       return {
         summary:
           b.status === 401 || b.status === 403
-            ? `Agents send the wrong credentials to ${b.path}. Correct the auth example in the page they read before the call.`
-            : `Correct the example for ${b.path} in the page agents read before the call.`,
+            ? `Agents send credentials the API rejects (${b.detail}). Correct the auth example in ${sourcePage ?? 'the page they read before the call'}.`
+            : `Correct the example for ${b.path} in ${sourcePage ?? 'the page agents read before the call'}.`,
         needsDraft: true,
       }
     case 'mcp_tool_error':
