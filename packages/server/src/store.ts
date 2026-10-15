@@ -18,6 +18,8 @@ export type WorkspaceSettings = {
   runner: { targetUrl?: string; timeoutSec?: number }
   /** Names a model gave to keyword groups. Keyed by group id. */
   intentLabels: Record<string, string>
+  /** Draft the top fixes in the background when a model is available. On unless set to false. */
+  autoDraft?: boolean
 }
 
 export const DEFAULT_SETTINGS: WorkspaceSettings = {

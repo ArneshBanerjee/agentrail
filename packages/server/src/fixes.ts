@@ -109,6 +109,7 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
     const workspaceId = ctx.workspaceOf(c)
     const days = Math.max(1, Number(c.req.query('days') ?? 30) || 30)
     const { fixes, settings } = candidates(workspaceId, days)
+    prepare(workspaceId, fixes.slice(0, 3).map((f) => f.key))
     const records = new Map(store.fixes(workspaceId).map((r) => [r.key, r]))
     // Published and dismissed fixes stay listed even after their blocker is gone from the window.
     const listed = fixes.map((f) => ({ ...f, record: records.get(f.key) }))
@@ -126,6 +127,7 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
     const days = Math.max(1, Number(c.req.query('days') ?? 30) || 30)
     const found = findFix(workspaceId, key, days)
     if (!found) return c.json({ error: 'No sessions show this problem.' }, 404)
+    prepare(workspaceId, [key])
     const record = store.fix(workspaceId, key)
     const runs = store.runs(workspaceId, key)
     const summary = (phase: 'before' | 'after') => {
@@ -156,19 +158,39 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
     return c.json(record)
   })
 
-  app.post('/api/fixes/:key/draft', async (c) => {
-    const workspaceId = ctx.workspaceOf(c)
-    const key = c.req.param('key')
-    const body = (await c.req.json().catch(() => ({}))) as { provider?: ProviderStatus['id'] }
+  /** Where the product lives, for reading a page's current text and for test runs. */
+  const siteBase = (workspaceId: string, settings: WorkspaceSettings) => {
+    const site = store.sites(workspaceId)[0]
+    return settings.runner.targetUrl ?? (site && site.host !== 'localhost' ? `https://${site.host}` : undefined)
+  }
+
+  /** The page as it is now, as markdown, from the product's own site, for the diff. */
+  const currentPage = async (base: string, path: string) => {
+    for (const url of [`${base.replace(/\/$/, '')}${path}.md`, `${base.replace(/\/$/, '')}${path}`]) {
+      try {
+        const res = await (deps.fetcher ?? fetch)(url, { headers: { accept: 'text/markdown, text/plain;q=0.9', 'user-agent': 'agentrail-fixes' }, signal: AbortSignal.timeout(5000) })
+        if (res.ok && /markdown|text\/plain/i.test(res.headers.get('content-type') ?? '')) return { path: path.replace(/^\//, ''), content: await res.text() }
+      } catch {
+        // The next form, then no "before".
+      }
+    }
+    return undefined
+  }
+
+  /**
+   * Start drafting one fix in the background. Drafting can take a minute with Claude Code, so it
+   * runs after the caller returns, and the page polls.
+   */
+  const startDraft = (workspaceId: string, key: string, requested?: ProviderStatus['id']): { ok: true; provider: string } | { ok: false; status: 400 | 404; error: string } => {
     const found = findFix(workspaceId, key, 30)
-    if (!found) return c.json({ error: 'No sessions show this problem.' }, 404)
-    const provider = body.provider ?? defaultProvider(found.settings.llm, env)
-    if (!provider) return c.json({ error: 'No model is set up. Sign in to Claude Code on the server, or add an API key in Settings.' }, 400)
+    if (!found) return { ok: false, status: 404, error: 'No sessions show this problem.' }
+    const provider = requested ?? defaultProvider(found.settings.llm, env)
+    if (!provider) return { ok: false, status: 400, error: 'No model is set up. Sign in to Claude Code on the server, or add an API key in Settings.' }
     let chat
     try {
       chat = chatFor(provider, found.settings.llm, env)
     } catch (error) {
-      return c.json({ error: (error as Error).message }, 400)
+      return { ok: false, status: 400, error: (error as Error).message }
     }
     const record = store.fix(workspaceId, key) ?? blank(workspaceId, key, ctx.now())
     record.drafting = true
@@ -176,19 +198,21 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
     record.updatedAt = ctx.now()
     store.saveFix(record)
 
-    // Drafting can take a minute with Claude Code, so it runs after the response. The page polls.
     const ids = new Set(found.fix.sessionIds)
     const sessions = found.a.sessions.filter((s) => ids.has(s.id))
+    const servePath = found.fix.kind === 'markdown_served_html' || found.fix.kind === 'not_found' ? found.fix.path : found.fix.sourcePage
     void (async () => {
       const latest = () => store.fix(workspaceId, key) ?? record
       try {
         const gh = github(found.settings)
-        const source = gh && found.fix.sourcePage ? await findDocsFile(gh, found.settings.github.docsRoot ?? '', found.fix.sourcePage, deps.fetcher) : undefined
+        const base = siteBase(workspaceId, found.settings)
+        const source =
+          (gh && found.fix.sourcePage ? await findDocsFile(gh, found.settings.github.docsRoot ?? '', found.fix.sourcePage, deps.fetcher) : undefined) ??
+          (base && servePath ? await currentPage(base, servePath) : undefined)
         const reply = await chat({ system: DRAFT_SYSTEM, messages: [{ role: 'user', content: draftPrompt(found.fix, sessions, source) }], schema: DRAFT_SCHEMA })
         const parsed = parseDraft(reply)
         if (!parsed?.content) throw new LlmError('The model did not return a change in the expected format.')
         const next = latest()
-        const servePath = found.fix.kind === 'markdown_served_html' || found.fix.kind === 'not_found' ? found.fix.path : found.fix.sourcePage
         next.draft = {
           file: source?.path ?? parsed.file ?? `${(found.fix.sourcePage ?? 'docs/agent-fix').replace(/^\//, '')}.md`,
           ...(servePath ? { servePath } : {}),
@@ -210,7 +234,31 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
         store.saveFix(next)
       }
     })()
-    return c.json({ message: `Drafting with ${providerStatus(found.settings.llm, env).find((p) => p.id === provider)?.label ?? provider}.` }, 202)
+    return { ok: true, provider: providerStatus(found.settings.llm, env).find((p) => p.id === provider)?.label ?? provider }
+  }
+
+  /**
+   * "Review fixes prepared for you": the top fixes are drafted before anyone opens them. Each fix is
+   * drafted once; a failure waits an hour before it is tried again, so a broken provider is not
+   * called on every page view. Settings can turn this off.
+   */
+  const prepare = (workspaceId: string, keys: readonly string[]) => {
+    const settings = store.settings(workspaceId)
+    if (settings.autoDraft === false || !defaultProvider(settings.llm, env)) return
+    for (const key of keys) {
+      const record = store.fix(workspaceId, key)
+      if (record?.draft || record?.drafting || record?.status === 'dismissed') continue
+      if (record?.draftError && ctx.now() - record.updatedAt < 3_600_000) continue
+      if (!findFix(workspaceId, key, 30)?.fix.proposal.needsDraft) continue
+      startDraft(workspaceId, key)
+    }
+  }
+  ctx.prepareFixes = (workspaceId, keys) => prepare(workspaceId, keys)
+
+  app.post('/api/fixes/:key/draft', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { provider?: ProviderStatus['id'] }
+    const r = startDraft(ctx.workspaceOf(c), c.req.param('key'), body.provider)
+    return r.ok ? c.json({ message: `Drafting with ${r.provider}.` }, 202) : c.json({ error: r.error }, r.status)
   })
 
   app.post('/api/fixes/:key/publish', async (c) => {
@@ -264,8 +312,7 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
     const agents = runnerAgents(found.settings.llm, env)
     const agent = agents.find((a) => a.id === body.agent && a.ready) ?? agents.find((a) => a.ready)
     if (!agent) return c.json({ error: 'No agent is available. Sign in to Claude Code on the server, or add an API key in Settings.' }, 400)
-    const site = store.sites(workspaceId)[0]
-    const targetUrl = found.settings.runner.targetUrl ?? (site && site.host !== 'localhost' ? `https://${site.host}` : undefined)
+    const targetUrl = siteBase(workspaceId, found.settings)
     if (!targetUrl) return c.json({ error: 'Set the preview URL for test runs in Settings.' }, 400)
     const ids = new Set(found.fix.sessionIds)
     const intents = groupIntents(found.a.sessions.filter((s) => ids.has(s.id)))

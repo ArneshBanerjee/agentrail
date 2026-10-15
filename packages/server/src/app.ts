@@ -38,6 +38,8 @@ export type AppContext = {
   readonly now: () => number
   readonly workspaceOf: (c: Context) => string
   readonly windowOf: (c: Context) => Window
+  /** Set by the fixes feature: draft these fixes in the background if they have no draft yet. */
+  prepareFixes?: (workspaceId: string, keys: readonly string[]) => void
 }
 
 const DAY = 86_400_000
@@ -128,6 +130,7 @@ export const createApp = (deps: AppDeps) => {
     const workspaceId = workspaceOf(c)
     const a = analyzer.analyze(workspaceId, windowOf(c), { siteId: c.req.query('site') })
     const s = summarize(store, workspaceId, a, now())
+    ctx.prepareFixes?.(workspaceId, s.fixes.slice(0, 3).map((f) => f.key))
     const records = new Map(store.fixes(workspaceId).map((f) => [f.key, f]))
     const fixes = s.fixes.filter((f) => records.get(f.key)?.status !== 'dismissed')
     return c.json({
@@ -158,7 +161,7 @@ export const createApp = (deps: AppDeps) => {
       .filter((s) => !blocker || s.blockers.some((b) => b.key === blocker))
       .filter((s) => !inIntent || inIntent.has(s.id))
       .filter((s) => !q || [s.intent, s.landingPath, s.agent.name, ...s.searches].some((x) => x?.toLowerCase().includes(q)))
-    return c.json({ total: list.length, sessions: list.slice(0, limit).map((s) => sessionSummary(s, t)) })
+    return c.json({ total: list.length, sessions: list.slice(0, limit).map((s) => sessionSummary(s, t, settings.funnel)) })
   })
 
   app.get('/api/sessions/:id', (c) => {
@@ -166,7 +169,8 @@ export const createApp = (deps: AppDeps) => {
     const a = analyzer.analyze(workspaceId, windowOf(c), { runs: true })
     const s = a.sessions.find((x) => x.id === c.req.param('id'))
     if (!s) return c.json({ error: 'not found' }, 404)
-    return c.json(sessionDetail(s, store.settings(workspaceId).funnel, now()))
+    const settings = store.settings(workspaceId)
+    return c.json(sessionDetail(s, settings.funnel, now(), settings.conversionStep))
   })
 
   app.get('/api/arrivals', (c) => {
@@ -174,7 +178,8 @@ export const createApp = (deps: AppDeps) => {
     const a = analyzer.analyze(workspaceId, windowOf(c))
     const t = now()
     const latest = [...a.sessions].sort((x, y) => y.endedAt - x.endedAt).slice(0, Number(c.req.query('limit') ?? 20))
-    return c.json({ arrivals: latest.map((s) => sessionSummary(s, t)) })
+    const funnel = store.settings(workspaceId).funnel
+    return c.json({ arrivals: latest.map((s) => sessionSummary(s, t, funnel)) })
   })
 
   app.get('/api/agents', (c) => {
@@ -253,6 +258,7 @@ export const createApp = (deps: AppDeps) => {
       github: keep(body.github, current.github, 'token'),
       stripe: keep(body.stripe, current.stripe, 'webhookSecret'),
       runner: { ...current.runner, ...(body.runner ?? {}) },
+      ...(body.autoDraft !== undefined ? { autoDraft: body.autoDraft } : {}),
     }
     store.saveSettings(workspaceId, updated)
     return c.json(maskSettings(updated))
@@ -291,7 +297,8 @@ export const createApp = (deps: AppDeps) => {
     })
   })
 
-  deps.extend?.(app, { store, config, analyzer, ingestDeps, live, now, workspaceOf, windowOf })
+  const ctx: AppContext = { store, config, analyzer, ingestDeps, live, now, workspaceOf, windowOf }
+  deps.extend?.(app, ctx)
 
   // The dashboard is static files from packages/web. Unknown paths get index.html so client-side
   // routes survive a reload.
@@ -306,5 +313,5 @@ export const createApp = (deps: AppDeps) => {
     return c.html(readFileSync(join(dist, 'index.html'), 'utf8'))
   })
 
-  return { app, ctx: { store, config, analyzer, ingestDeps, live, now, workspaceOf, windowOf } satisfies AppContext }
+  return { app, ctx }
 }
