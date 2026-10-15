@@ -139,6 +139,7 @@ Each one has a reason. Nothing else is added without a reason in this table.
 | `@anthropic-ai/sdk` | server | Anthropic provider. The official SDK, so typed errors and new API fields come with updates |
 | `openai` | server | OpenAI provider, and any OpenAI-compatible server such as Ollama |
 | `@google/genai` | server | Gemini provider |
+| `web-bot-auth` | server | Cloudflare's Web Bot Auth verifier (RFC 9421), for the `verified` label |
 
 Built-in instead of a package: SQLite (`node:sqlite`), Ed25519 and HMAC (`node:crypto`), HTTP client
 (`fetch`). Node 22.5 or newer is required.
