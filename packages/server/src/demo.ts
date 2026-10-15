@@ -3,6 +3,12 @@ import type { IncomingEvent } from '@agentrail/core'
 /**
  * A month of agent traffic for a made-up payments API called Ledgerly, for the demo workspace and
  * for screenshots. Seeded, so every run makes the same month.
+ *
+ * It is all plain HTTP, the way a product sees agents that nobody configured: the docs finder,
+ * pages read, a CLI download, a device sign-in that polls until a person approves it, API calls and
+ * payments. The problems in it are the ones agents really hit: a wrong auth header in the API keys
+ * guide, a path agents guess, markdown asked for and HTML served, a sign-in nobody approves, and a
+ * real card used in test mode.
  */
 
 const mulberry32 = (seed: number) => () => {
@@ -13,67 +19,60 @@ const mulberry32 = (seed: number) => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296
 }
 
-type Agent = { ua: string; mcp?: string; weight: number; skill: number; accept?: string }
+type Agent = { ua: string; mcp?: string; weight: number; skill: number; accept?: string; finder: number }
 
 const AGENTS: Agent[] = [
-  { ua: 'Cursor/1.7.38 (darwin arm64)', mcp: 'cursor', weight: 40, skill: 0.62 },
-  { ua: 'codex_cli_rs/0.46.0 (Mac OS 15.0; arm64)', mcp: 'codex-mcp-client', weight: 25, skill: 0.7 },
-  { ua: 'Claude-User (claude-code/2.1.90; +https://support.anthropic.com/)', mcp: 'claude-code', weight: 18, skill: 0.72, accept: 'text/markdown, text/html;q=0.8' },
-  { ua: 'python-requests/2.32.3', weight: 9, skill: 0.35, accept: 'text/markdown' },
-  { ua: '', weight: 4, skill: 0.3 },
-  { ua: 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; ChatGPT-User/1.0; +https://openai.com/bot)', weight: 3, skill: 0.5 },
-  { ua: 'GeminiCLI/0.9.0 (darwin; arm64)', mcp: 'gemini-cli-mcp-client', weight: 1, skill: 0.55 },
+  { ua: 'Cursor/1.7.38 (darwin arm64)', mcp: 'cursor', weight: 40, skill: 0.62, finder: 0.6 },
+  { ua: 'codex_cli_rs/0.46.0 (Mac OS 15.0; arm64)', mcp: 'codex-mcp-client', weight: 25, skill: 0.7, finder: 0.65 },
+  { ua: 'Claude-User (claude-code/2.1.288; +https://support.anthropic.com/)', mcp: 'claude-code', weight: 18, skill: 0.72, accept: 'text/markdown, text/html;q=0.8', finder: 0.75 },
+  { ua: 'python-requests/2.32.3', weight: 9, skill: 0.35, accept: 'text/markdown', finder: 0.3 },
+  { ua: 'curl/8.7.1', weight: 4, skill: 0.3, finder: 0.4 },
+  { ua: 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; ChatGPT-User/1.0; +https://openai.com/bot)', weight: 3, skill: 0.5, finder: 0.5 },
+  { ua: 'GeminiCLI/0.9.0 (darwin; arm64)', mcp: 'gemini-cli-mcp-client', weight: 1, skill: 0.55, finder: 0.5 },
 ]
 
-type Intent = { group: string; tasks: string[]; amount: [number, number]; docs: string[]; endpoint: string }
+type Intent = { tasks: string[]; amount: [number, number]; docs: string[]; calls: { method: string; path: string }[] }
 
 const INTENTS: Intent[] = [
   {
-    group: 'subscriptions',
     tasks: [
-      'Bill API calls at $0.002 each with usage-based billing.',
-      'Set up usage-based billing with meter events for our API.',
-      'Create a monthly subscription with a 14 day trial for the Pro plan.',
-      'Charge customers per seat on a monthly subscription.',
+      'set up usage-based billing with meter events for our API',
+      'bill API calls at $0.002 each with usage-based billing',
+      'create a monthly subscription with a 14 day trial for the Pro plan',
+      'charge customers per seat on a monthly subscription',
     ],
     amount: [2900, 14900],
-    docs: ['/docs/billing/usage', '/docs/subscriptions', '/docs/api-keys'],
-    endpoint: '/v1/meters',
+    docs: ['/docs/billing/usage-based', '/docs/billing/meters', '/docs/sdk/quickstart', '/docs/api-keys'],
+    calls: [
+      { method: 'POST', path: '/v1/subscriptions' },
+      { method: 'POST', path: '/v1/billing/meter_events' },
+      { method: 'POST', path: '/v1/billing/meter_events' },
+      { method: 'GET', path: '/v1/billing/meters/mtr_8Yx2/event_summaries' },
+    ],
   },
   {
-    group: 'checkout',
-    tasks: [
-      'Set up a Checkout session for a one-time €120 payment and return the URL.',
-      'Add a pay button to my Next.js store that opens a hosted checkout.',
-      'Create a payment link for a $49 ebook.',
-    ],
+    tasks: ['set up a Checkout session for a one-time €120 payment and return the URL', 'add a pay button to my Next.js store that opens a hosted checkout', 'create a payment link for a $49 ebook'],
     amount: [4900, 12000],
     docs: ['/docs/checkout', '/docs/checkout/sessions', '/docs/api-keys'],
-    endpoint: '/v1/checkout/sessions',
+    calls: [{ method: 'POST', path: '/v1/checkout/sessions' }],
   },
   {
-    group: 'refunds',
-    tasks: [
-      'Refund the last charge for cus_8x2Lk and let them know by email.',
-      'Refund half of order 1042 to the original card.',
-    ],
+    tasks: ['refund the last charge for cus_8x2Lk and let them know by email', 'refund half of order 1042 to the original card'],
     amount: [900, 2900],
     docs: ['/docs/refunds', '/docs/api-keys'],
-    endpoint: '/v1/refunds',
+    calls: [{ method: 'GET', path: '/v1/charges' }, { method: 'POST', path: '/v1/refunds' }],
   },
   {
-    group: 'webhooks',
-    tasks: ['Listen for successful payments with a webhook and mark the order paid.', 'Verify webhook signatures in my Express server.'],
+    tasks: ['invoice with line items and a due date', 'send an invoice when the contract is signed'],
+    amount: [4900, 19900],
+    docs: ['/docs/invoices', '/docs/api-keys'],
+    calls: [{ method: 'POST', path: '/v1/invoices' }, { method: 'POST', path: '/v1/invoices/in_42/send' }],
+  },
+  {
+    tasks: ['listen for successful payments with a webhook and mark the order paid', 'verify webhook signatures in my Express server'],
     amount: [2900, 4900],
     docs: ['/docs/webhooks', '/docs/webhooks/signatures'],
-    endpoint: '/v1/webhook_endpoints',
-  },
-  {
-    group: 'payouts',
-    tasks: ['Send weekly payouts to my sellers in India.', 'Split a payment between two sellers on my marketplace.'],
-    amount: [9900, 29900],
-    docs: ['/docs/connect', '/docs/payouts', '/docs/api-keys'],
-    endpoint: '/v1/transfers',
+    calls: [{ method: 'POST', path: '/v1/webhook_endpoints' }],
   },
 ]
 
@@ -108,79 +107,88 @@ export const demoEvents = (options: DemoOptions): IncomingEvent[] => {
     const agent = weighted(AGENTS)
     const intent = pick(INTENTS)
     // The last few sessions are minutes old, so the demo has something live.
-    const at = i < 4 ? options.now - between(20, 200) * 1000 : start + Math.pow(rand(), 0.8) * (days * 86_400_000 - 3_600_000)
+    const at = i < 5 ? options.now - between(10, 200) * 1000 : start + Math.pow(rand(), 0.8) * (days * 86_400_000 - 3_600_000)
     let t = Math.round(at)
     const ip = `198.51.${100 + (i % 50)}.${(i * 7) % 250}`
-    const hint = `cli-${i}`
     const account = `acct_${1000 + i}`
-    const base = { ...(agent.ua ? { userAgent: agent.ua } : {}), ip }
+    const base = { userAgent: agent.ua, ip }
+    const docs = 'docs.ledgerly.dev'
+    const api = 'api.ledgerly.dev'
     const push = (e: Omit<IncomingEvent, 'id' | 'ts'>, gapSec: [number, number] = [2, 20]) => {
       t += between(gapSec[0], gapSec[1]) * 1000
+      if (t > options.now) return false
       events.push({ id: id(), ts: t, ...e } as IncomingEvent)
+      return true
     }
     const read = (path: string, status = 200, extra: Partial<IncomingEvent> = {}) =>
-      push({ source: 'http', kind: 'request', method: 'GET', host: 'docs.ledgerly.dev', path, status, contentType: path.endsWith('.txt') || path.endsWith('.md') ? 'text/markdown' : 'text/html; charset=utf-8', ...(agent.accept ? { accept: agent.accept } : {}), ...base, ...extra })
+      push({ source: 'http', kind: 'request', method: 'GET', host: docs, path, status, contentType: path.endsWith('.txt') ? 'text/plain' : 'text/html; charset=utf-8', ...(agent.accept ? { accept: agent.accept } : {}), ...base, ...extra })
+    const call = (method: string, path: string, status = 200, extra: Partial<IncomingEvent> = {}) =>
+      push({ source: 'http', kind: 'request', method, host: api, path, status, accountId: account, ...base, ...extra }, [4, 25])
 
-    // How it found the product.
-    const via = rand()
-    if (via < 0.24) read('/llms.txt')
-    else if (via < 0.48) read(pick(intent.docs), 200, { referrer: pick(SEARCH_REFERRERS) })
-    else if (via < 0.6) push({ source: 'track', kind: 'search', text: pick(intent.tasks).replace(/\.$/, '').toLowerCase().split(' ').slice(0, 5).join(' '), ...base })
-    else if (via < 0.7) read('/docs', 200, { referrer: pick(COMPARISON) })
-    else if (via < 0.8) read('/sitemap.xml')
-    else if (agent.mcp && via < 0.88) push({ source: 'mcp', kind: 'mcp_connect', mcpClient: agent.mcp, sessionHint: hint, ...base })
-    else read('/docs')
-
+    // How it found the product, and whether it said what it wants through the docs finder.
     const task = pick(intent.tasks)
-    if (chance(0.63)) push({ source: 'intake', kind: 'intent', text: task, ...base, ...(agent.mcp ? { sessionHint: hint } : {}) }, [1, 3])
+    if (chance(agent.finder)) {
+      if (chance(0.5)) read('/llms.txt')
+      push({ source: 'intake', kind: 'intent', text: task, method: 'POST', host: docs, path: '/api/docs/find', status: 200, ...base }, [1, 4])
+    } else {
+      const via = rand()
+      if (via < 0.35) read(pick(intent.docs), 200, { referrer: pick(SEARCH_REFERRERS) })
+      else if (via < 0.5) read('/docs', 200, { referrer: pick(COMPARISON) })
+      else if (via < 0.65) read('/sitemap.xml')
+      else if (agent.mcp && via < 0.75) push({ source: 'mcp', kind: 'mcp_connect', mcpClient: agent.mcp, sessionHint: `mcp-${i}`, ...base })
+      else read('/docs')
+    }
 
-    // Reading the docs. A guessed path that does not exist, and markdown asked for and HTML given.
-    if (intent.group === 'subscriptions' && chance(0.3)) read('/docs/usage-billing', 404)
+    // Reading. A guessed path that does not exist, and markdown asked for and HTML given.
+    if (intent.docs[0] === '/docs/billing/usage-based' && chance(0.25)) read('/docs/usage-billing', 404)
     for (const path of intent.docs.slice(0, between(1, intent.docs.length))) read(path)
-    if (agent.accept && chance(0.25)) read('/docs/quickstart', 200)
+    if (agent.accept && chance(0.3)) read('/docs/quickstart')
 
     if (!chance(0.62 + agent.skill * 0.15)) continue
-    push({ source: 'track', kind: 'step', step: 'installed', text: chance(0.7) ? 'npm install @ledgerly/node' : 'pip install ledgerly', sessionHint: hint, ...base }, [10, 40])
+    if (!(chance(0.6) ? read('/dl/v/ledgerly-cli.tgz') : push({ source: 'http', kind: 'request', method: 'POST', host: api, path: '/api/cli/init', status: 200, ...base }, [10, 40]))) continue
 
-    if (chance(0.09)) {
-      push({ source: 'track', kind: 'step', step: 'signin_started', text: 'ledgerly login (waiting for browser approval)', sessionHint: hint, ...base }, [5, 15])
-      continue
-    }
-    if (!chance(0.85)) continue
-    push({ source: 'track', kind: 'step', step: 'signed_in', text: 'ledgerly login, approved by a person', sessionHint: hint, accountId: account }, [15, 60])
-    if (agent.mcp && chance(0.3)) push({ source: 'mcp', kind: 'mcp_connect', mcpClient: agent.mcp, sessionHint: hint, accountId: account }, [3, 10])
+    // Device sign-in: the agent polls until a person approves it, and sometimes nobody does.
+    push({ source: 'http', kind: 'request', method: 'POST', host: api, path: '/api/cli/init', status: 200, ...base }, [3, 8])
+    push({ source: 'http', kind: 'request', method: 'POST', host: api, path: '/api/device/start', status: 200, ...base }, [1, 3])
+    const polls = between(2, 7)
+    const approved = chance(0.86)
+    for (let p = 0; p < polls; p++) push({ source: 'http', kind: 'request', method: 'POST', host: api, path: '/api/device/poll', status: 428, ...base }, [4, 6])
+    if (!approved) continue
+    if (!push({ source: 'http', kind: 'request', method: 'POST', host: api, path: '/api/device/poll', status: 200, accountId: account, ...base }, [4, 6])) continue
+    if (agent.mcp && chance(0.2)) push({ source: 'mcp', kind: 'mcp_connect', mcpClient: agent.mcp, accountId: account, ...base }, [3, 10])
 
-    const api = (path: string, status: number, error?: string) =>
-      push({ source: 'http', kind: 'request', method: 'POST', host: 'api.ledgerly.dev', path, status, ...(error ? { error } : {}), accountId: account, ...base }, [5, 25])
-
-    // The documented header is wrong in the API keys guide, and agents that read it copy it.
+    // The API keys guide shows the wrong header, and agents that read it copy it.
     const readKeysGuide = intent.docs.includes('/docs/api-keys')
+    const first = intent.calls[0]!
     if (readKeysGuide && chance(0.55 - agent.skill * 0.25)) {
-      api(intent.endpoint, 401, 'X-Api-Key rejected')
+      call(first.method, first.path, 401, { error: 'X-Api-Key rejected' })
       if (chance(0.6)) {
         read('/docs/api-keys')
-        api(intent.endpoint, 401, 'X-Api-Key rejected')
+        call(first.method, first.path, 401, { error: 'X-Api-Key rejected' })
       }
-      if (chance(0.75)) continue
+      if (chance(0.8)) continue
     }
-    if (agent.mcp && chance(0.06)) {
-      push({ source: 'mcp', kind: 'mcp_tool', tool: 'create_meter_event', ok: false, error: 'missing field: event_name', sessionHint: hint, accountId: account, mcpClient: agent.mcp }, [3, 10])
+    if (first.path === '/v1/webhook_endpoints' && chance(0.3)) {
+      call(first.method, first.path, 400, { error: 'url must be https' })
       if (chance(0.7)) continue
     }
-    api(intent.endpoint, 200)
-    push({ source: 'track', kind: 'step', step: 'first_api_call', sessionHint: hint, accountId: account }, [0, 1])
+    if (agent.mcp && chance(0.05)) {
+      push({ source: 'mcp', kind: 'mcp_tool', tool: 'create_meter_event', ok: false, error: 'missing field: event_name', accountId: account, mcpClient: agent.mcp, ...base }, [3, 10])
+      if (chance(0.7)) continue
+    }
+    for (const c of intent.calls) call(c.method, c.path)
 
     // A real card in test mode is declined, and agents rarely know the test card numbers.
-    if (chance(0.16)) {
+    if (chance(0.14)) {
       push({ source: 'stripe', kind: 'payment', ok: false, error: 'card_declined: live card used in test mode', accountId: account, currency: 'usd' }, [20, 90])
       if (chance(0.8)) continue
     }
-    if (!chance(0.72)) continue
+    if (!chance(0.74)) continue
     const amount = between(intent.amount[0], intent.amount[1])
-    push({ source: 'stripe', kind: 'payment', amount, currency: 'usd', accountId: account }, [600, 7200])
+    push({ source: 'stripe', kind: 'payment', amount, currency: 'usd', accountId: account }, [60, 900])
     const renewal = t + 30 * 86_400_000
     if (renewal < options.now && chance(0.85)) events.push({ id: id(), ts: renewal, source: 'stripe', kind: 'payment', amount, currency: 'usd', accountId: account } as IncomingEvent)
-    else if (chance(0.45)) push({ source: 'stripe', kind: 'payment', amount, currency: 'usd', accountId: account }, [86_400, 5 * 86_400])
+    else if (chance(0.5)) push({ source: 'stripe', kind: 'payment', amount, currency: 'usd', accountId: account }, [86_400, 5 * 86_400])
   }
-  return events.filter((e) => e.ts <= options.now).sort((a, b) => a.ts - b.ts)
+  return events.sort((a, b) => a.ts - b.ts)
 }

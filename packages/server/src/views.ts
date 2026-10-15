@@ -13,7 +13,7 @@ export const sessionSummary = (s: Session, now: number, funnel: readonly FunnelS
     host: s.events.find((e) => e.host)?.host,
     steps: s.events.length,
     stage: stage ? { id: stage.id, label: stage.label } : undefined,
-    lastStep: last ? { name: stepName(last), detail: wireOf(last), failed: (last.status ?? 0) >= 400 || last.ok === false } : undefined,
+    lastStep: last ? { name: stepName(last), detail: wireOf(last), failed: ((last.status ?? 0) >= 400 && stepName(last) !== 'poll') || last.ok === false } : undefined,
     agent: s.agent,
     startedAt: s.startedAt,
     endedAt: s.endedAt,

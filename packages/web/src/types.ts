@@ -8,7 +8,7 @@ export type Me = { workspaces: { id: string; name: string }[]; workspaceId: stri
 export type FixRecord = {
   key: string
   status: 'open' | 'drafted' | 'testing' | 'published' | 'dismissed'
-  draft?: { file: string; before?: string; after: string; summary: string; provider: string }
+  draft?: { file: string; servePath?: string; title?: string; before?: string; after: string; summary: string; provider: string }
   drafting?: boolean
   draftError?: string
   prUrl?: string
@@ -30,6 +30,10 @@ export type Summary = {
 
 export type SessionSummary = {
   id: string
+  host?: string
+  steps: number
+  stage?: { id: string; label: string }
+  lastStep?: { name: string; detail: string; failed: boolean }
   agent: Attribution
   startedAt: number
   endedAt: number
@@ -53,6 +57,7 @@ export type SessionSummary = {
 }
 
 export type SessionDetail = Omit<SessionSummary, 'failedCalls'> & {
+  stepper: { id: string; label: string; at?: number; independent: boolean }[]
   blockerList: Blocker[]
   timeline: TimelineItem[]
   gotTo?: { id: string; label: string }

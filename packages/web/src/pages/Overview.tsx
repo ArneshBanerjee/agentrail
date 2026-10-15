@@ -1,10 +1,13 @@
-import { AgentName, Change, Empty, ErrorBox, Funnel, LabelChip, Link, Loading, Stat } from '../components.tsx'
-import { fmt, navigate, useApi, useDays, useLive, lowerFirst } from '../lib.ts'
+import { useState } from 'react'
+import { AgentName, Change, ColumnFunnel, Empty, ErrorBox, LabelChip, Link, Loading, Stat } from '../components.tsx'
+import { FixDialog } from '../dialog.tsx'
+import { fmt, lowerFirst, navigate, useApi, useDays, useLive } from '../lib.ts'
 import type { SessionSummary, Summary } from '../types.ts'
 
 export const Overview = () => {
   const [days] = useDays()
   const summary = useApi<Summary>(`/api/summary?days=${days}&fixes=3&intents=3`)
+  const [open, setOpen] = useState<string>()
   const arrivals = useApi<{ arrivals: SessionSummary[] }>(`/api/arrivals?days=${days}&limit=6`)
   useLive(undefined, () => {
     summary.reload()
@@ -17,7 +20,7 @@ export const Overview = () => {
   const totalIntents = o.withIntent
   const main = s.intents[0]
   const biggest = s.fixes[0]
-  const agentNames = s.agents.map((a) => a.label)
+  const biggestLive = biggest?.record?.status === 'published'
   if (o.sessions === 0) {
     return (
       <div className="card">
@@ -35,57 +38,64 @@ export const Overview = () => {
   }
   return (
     <>
+      {open ? <FixDialog fixKey={open} onClose={() => setOpen(undefined)} onPublished={summary.reload} /> : null}
       <div className="grid g4">
         <Stat
-          label="Agent sessions"
+          label="Traffic"
           aside={
             <span className="live">
               <span className={`dot ${o.live > 0 ? 'on' : ''}`} /> {o.live} live
             </span>
           }
-          value={fmt.n(o.sessions)}
-          sub={
+          value={
             <>
-              <Change value={o.sessionsChange} /> {o.sessionsChange !== undefined ? 'vs the window before' : `${days} days`}
+              {fmt.n(o.sessions)} <span className="small">{o.sessionsChange !== undefined ? <Change value={o.sessionsChange} /> : null}</span>
             </>
           }
+          sub={`sessions · ${days === 1 ? '24 hours' : `${days} days`}`}
         />
         <Stat
-          label="Conversion"
-          value={fmt.pct(o.conversion)}
-          sub={
+          label="Conversion rate"
+          value={
             <>
-              <Change value={o.conversionChange} points /> to {lowerFirst(s.funnelSteps.find((f) => f.id === 'first_payment')?.label ?? 'conversion')}
+              {fmt.pct(o.conversion)} <span className="small">{o.conversionChange !== undefined ? <Change value={o.conversionChange} points /> : null}</span>
             </>
           }
+          sub={`${fmt.n(o.converted)} sessions`}
         />
         <Stat
           label="Main intent"
           text
           value={main ? main.label : '—'}
-          sub={main ? `${fmt.pct(main.sessions / Math.max(totalIntents, 1), 0)} of ${fmt.n(totalIntents)} stated tasks` : 'No stated tasks yet'}
+          sub={main ? `${fmt.pct(main.sessions / Math.max(totalIntents, 1), 0)} of ${fmt.n(totalIntents)} intents` : 'No stated tasks yet'}
         />
-        <Stat
-          label="Biggest fix"
-          text
-          value={biggest ? <Link to={`/fixes/${encodeURIComponent(biggest.key)}`}>{biggest.sourcePage ?? biggest.title}</Link> : 'Nothing blocking'}
-          sub={biggest ? `${fmt.n(biggest.sessionsLost)} sessions lost` : 'No blockers found'}
-        />
+        <div className={`card stat ${biggest ? 'clickcard' : ''}`} onClick={() => biggest && setOpen(biggest.key)} role={biggest ? 'button' : undefined} tabIndex={biggest ? 0 : undefined}>
+          <div className="label">
+            <span>Biggest fix {biggest ? '↗' : ''}</span>
+          </div>
+          <div className="value text">{biggest ? (biggest.where ?? biggest.action) : 'Nothing blocking'}</div>
+          <div className="sub">
+            {biggest ? (
+              <>
+                {biggestLive ? <span className="islive">live · </span> : null}
+                {fmt.n(biggest.sessionsLost)} sessions · {days === 1 ? '24 hours' : `${days} days`}
+              </>
+            ) : (
+              'No blockers found'
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="grid g21 section">
-        <div className="card">
-          <h2>
-            Funnel by agent <span className="faint small">{fmt.n(o.sessions)} sessions</span>
-          </h2>
-          <Funnel rows={s.funnel} agents={agentNames} />
-          {o.mcpConnected > 0 ? (
-            <p className="muted small" style={{ marginTop: 14 }}>
-              {fmt.n(o.mcpConnected)} sessions connected to your MCP server.
-            </p>
-          ) : null}
-        </div>
-        <div className="stack" style={{ gap: 16, alignContent: 'start' }}>
+      <div className="card section">
+        <h2>
+          Funnel <span className="faint small">{fmt.n(o.sessions)} sessions</span>
+        </h2>
+        <ColumnFunnel rows={s.funnel} agents={s.agents.map((a) => ({ label: a.label, sessions: a.sessions }))} />
+      </div>
+
+      <div className="grid g2 section">
+        <div style={{ display: 'contents' }}>
           <div className="card">
             <h2>
               Intents <Link to="/intents">All intents</Link>
@@ -93,7 +103,7 @@ export const Overview = () => {
             <div className="list">
               {s.intents.length === 0 ? <span className="muted">No stated tasks in this window.</span> : null}
               {s.intents.map((i) => (
-                <Link key={i.id} to={`/journeys?intent=${encodeURIComponent(i.id)}`}>
+                <Link key={i.id} to={`/sessions?intent=${encodeURIComponent(i.id)}`}>
                   <div className="between">
                     <span className="bold">{i.label}</span>
                     <span className="muted small">
@@ -119,8 +129,8 @@ export const Overview = () => {
                       {fmt.n(f.sessionsLost)} sessions lost{f.beforeStep ? ` · before ${lowerFirst(s.funnelSteps.find((x) => x.id === f.beforeStep)?.label ?? f.beforeStep)}` : ''}
                     </div>
                   </div>
-                  <button className="btn" onClick={() => navigate(`/fixes/${encodeURIComponent(f.key)}`)}>
-                    Fix
+                  <button className="btn" onClick={() => setOpen(f.key)}>
+                    {f.record?.status === 'published' ? 'Live' : 'Fix'}
                   </button>
                 </div>
               ))}
@@ -145,7 +155,7 @@ export const Overview = () => {
             </thead>
             <tbody>
               {s.agents.slice(0, 6).map((a) => (
-                <tr key={a.key} className="click" onClick={() => navigate(`/journeys?agent=${encodeURIComponent(a.key)}`)}>
+                <tr key={a.key} className="click" onClick={() => navigate(`/sessions?agent=${encodeURIComponent(a.key)}`)}>
                   <td>
                     <AgentName name={a.label} />
                   </td>
@@ -171,7 +181,7 @@ export const Overview = () => {
           </h2>
           <div className="feed">
             {(arrivals.data?.arrivals ?? []).map((a) => (
-              <Link key={a.id} to={`/journeys/${encodeURIComponent(a.id)}`} className="item">
+              <Link key={a.id} to={`/sessions/${encodeURIComponent(a.id)}`} className="item">
                 <AgentName name={a.agent.name} surface={a.agent.surface} />
                 <span className="row-flex">
                   <LabelChip label={a.agent.label} />

@@ -33,7 +33,7 @@ export const Intents = () => {
         {data.intents.map((i) => (
           <div key={i.id} className="card">
             <div className="between">
-              <Link to={`/journeys?intent=${encodeURIComponent(i.id)}`}>
+              <Link to={`/sessions?intent=${encodeURIComponent(i.id)}`}>
                 <span className="bold" style={{ fontSize: 16 }}>
                   {i.label}
                 </span>

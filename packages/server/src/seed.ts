@@ -19,7 +19,7 @@ export const seedDemo = async (store: Store, secret: string, now: number) => {
       { id: 'checkout', label: 'Checkout', keywords: ['checkout', 'pay', 'link', 'store'] },
       { id: 'refunds', label: 'Refunds', keywords: ['refund'] },
       { id: 'webhooks', label: 'Webhooks', keywords: ['webhook', 'signature'] },
-      { id: 'payouts', label: 'Payouts', keywords: ['payout', 'seller', 'split', 'marketplace'] },
+      { id: 'invoices', label: 'Invoices', keywords: ['invoice', 'contract'] },
     ],
   })
   const events = demoEvents({ now })

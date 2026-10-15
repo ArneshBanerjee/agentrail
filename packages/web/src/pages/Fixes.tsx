@@ -326,7 +326,7 @@ export const FixDetail = ({ fixKey }: { fixKey: string }) => {
         <table>
           <tbody>
             {f.sessions.slice(0, 10).map((s) => (
-              <tr key={s.id} className="click" onClick={() => navigate(`/journeys/${encodeURIComponent(s.id)}`)}>
+              <tr key={s.id} className="click" onClick={() => navigate(`/sessions/${encodeURIComponent(s.id)}`)}>
                 <td>
                   <AgentName name={s.agent.name} surface={s.agent.surface} />
                 </td>

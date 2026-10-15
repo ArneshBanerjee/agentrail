@@ -212,6 +212,12 @@ export const fmt = {
     const pad = (v: number) => String(v).padStart(2, '0')
     return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`
   },
+  duration: (ms: number) => {
+    const s = Math.round(ms / 1000)
+    if (s < 60) return `${s} s`
+    if (s < 3600) return `${Math.round(s / 60)} min`
+    return `${(s / 3600).toFixed(s < 36000 ? 1 : 0)} h`
+  },
   ago: (ts: number, now = Date.now()) => {
     const s = Math.round((now - ts) / 1000)
     if (s < 60) return `${Math.max(s, 0)}s ago`

@@ -36,7 +36,7 @@ export const Arrivals = () => {
             {sessions.data.arrivals.map((a) => (
               <tr key={a.id}>
                 <td>
-                  <Link to={`/journeys/${encodeURIComponent(a.id)}`}>
+                  <Link to={`/sessions/${encodeURIComponent(a.id)}`}>
                     <AgentName name={a.agent.name} surface={a.agent.surface} />
                   </Link>
                 </td>

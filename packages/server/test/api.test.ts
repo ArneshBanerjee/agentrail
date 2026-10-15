@@ -67,7 +67,8 @@ test('sessions list and a session timeline', async () => {
     'POST /v1/meters  401  X-Api-Key rejected',
   ])
   expect(detail.body.timeline[3].marks).toEqual([{ kind: 'step', label: 'Installed' }])
-  expect(detail.body.timeline[5].marks.map((m: any) => m.kind)).toEqual(['blocked', 'stopped'])
+  // Still live, so it has not stopped yet.
+  expect(detail.body.timeline[5].marks.map((m: any) => m.kind)).toEqual(['blocked'])
   expect(detail.body).toMatchObject({ gotTo: { id: 'signed_in' }, stoppedAtLabel: 'First API call', failedCalls: { failed: 1, of: 1 } })
 })
 

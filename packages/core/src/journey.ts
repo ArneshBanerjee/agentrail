@@ -4,6 +4,7 @@ import { AGENTS } from './agents.ts'
 import type { StoredEvent } from './events.ts'
 import { DEFAULT_FUNNEL, reachedSteps, type FunnelStep } from './funnel.ts'
 import { looksLikeApi, normalizePath } from './paths.ts'
+import { isDownload } from './steps.ts'
 
 export type BlockerKind =
   /** An API call failed: a 4xx or 5xx on an API path, or a step tracked with `ok: false`. */
@@ -240,7 +241,10 @@ export const findBlockers = (events: readonly StoredEvent[]): Blocker[] => {
   const push = (b: Blocker) => blockers.push(lastRead ? { ...b, after: lastRead } : b)
   for (const e of events) {
     const path = e.path ? normalizePath(e.path) : undefined
-    if (e.kind === 'request' && e.status !== undefined && e.status >= 400) {
+    // A sign-in poll that answers "pending" is waiting for a person, not failing. RFC 8628 answers
+    // it with 400 and many APIs with 428; a sign-in nobody approves shows up as human_signin.
+    const pendingPoll = e.kind === 'request' && (e.status === 400 || e.status === 428) && /\/(device\/(poll|token)|oauth\/token)$/.test(e.path ?? '')
+    if (e.kind === 'request' && e.status !== undefined && e.status >= 400 && !pendingPoll) {
       const api = looksLikeApi(e.path ?? '', e.host)
       if (e.status === 404 && !api) {
         push({ kind: 'not_found', key: `not_found:${path}`, at: e.ts, eventId: e.id, detail: `${path} returned 404`, ...(path ? { path } : {}), status: 404 })
@@ -276,9 +280,12 @@ export const findBlockers = (events: readonly StoredEvent[]): Blocker[] => {
     if (e.kind === 'payment' && e.ok === false) {
       push({ kind: 'payment_failed', key: `payment_failed:${e.error ?? 'declined'}`, at: e.ts, eventId: e.id, detail: `Payment failed${e.error ? `: ${e.error}` : ''}` })
     }
-    if (e.kind === 'step' && e.step === 'signin_started') signinStarted.push(e)
-    if (e.kind === 'request' && (e.method ?? 'GET') === 'GET' && (e.status ?? 200) < 400 && path) lastRead = path
-    if (e.kind === 'step' && e.step === 'signed_in') signinStarted.length = 0
+    // A device sign-in is visible in HTTP alone: started, then a poll or token call that succeeds.
+    const ok = (e.status ?? 200) < 400
+    if ((e.kind === 'step' && e.step === 'signin_started') || (e.kind === 'request' && ok && /\/device\/(start|code)$/.test(e.path ?? ''))) signinStarted.push(e)
+    // The page an agent last read, for a fix to edit. Downloads and API reads are not pages.
+    if (e.kind === 'request' && (e.method ?? 'GET') === 'GET' && ok && path && !looksLikeApi(e.path ?? '', e.host) && !isDownload(e.path ?? '')) lastRead = path
+    if ((e.kind === 'step' && e.step === 'signed_in') || (e.kind === 'request' && ok && e.method === 'POST' && /\/(device\/(poll|token)|oauth\/token)$/.test(e.path ?? ''))) signinStarted.length = 0
   }
   for (const e of signinStarted) {
     push({ kind: 'human_signin', key: 'human_signin', at: e.ts, eventId: e.id, detail: 'Sign-in started and waited for a person' })

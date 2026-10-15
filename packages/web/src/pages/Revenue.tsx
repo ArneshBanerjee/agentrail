@@ -46,10 +46,10 @@ export const Revenue = () => {
         <Stat label="Per paying session" value={fmt.money(data.converted ? data.total / data.converted : 0, data.currency)} />
       </div>
       <div className="section">
-        <Table title="By agent" rows={data.byAgent} currency={data.currency} first="Agent" agent onRow={(r) => navigate(`/journeys?agent=${encodeURIComponent(r.key)}`)} />
+        <Table title="By agent" rows={data.byAgent} currency={data.currency} first="Agent" agent onRow={(r) => navigate(`/sessions?agent=${encodeURIComponent(r.key)}`)} />
       </div>
       <div className="grid g2 section">
-        <Table title="By intent" rows={data.byIntent} currency={data.currency} first="Intent" onRow={(r) => navigate(`/journeys?intent=${encodeURIComponent(r.key)}`)} />
+        <Table title="By intent" rows={data.byIntent} currency={data.currency} first="Intent" onRow={(r) => navigate(`/sessions?intent=${encodeURIComponent(r.key)}`)} />
         <Table title="By landing page" rows={data.byPage} currency={data.currency} first="Page" />
       </div>
     </>

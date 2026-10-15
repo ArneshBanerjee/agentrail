@@ -104,5 +104,18 @@ test('a fix says what to do and what share of the drop it explains', () => {
     ]),
   )
   const [auth] = rankFixes(sessions, { windowMs: 30 * 86_400_000 })
-  expect(auth).toMatchObject({ action: 'Fix the authentication sample in the api keys guide', sessionsLost: 3, beforeStep: 'first_api_call', dropShare: 0.75 })
+  expect(auth).toMatchObject({ action: 'Fix the authentication sample in the API keys guide', sessionsLost: 3, beforeStep: 'first_api_call', dropShare: 0.75 })
+})
+
+test('a pending sign-in poll is waiting, not failing, and downloads are not pages', () => {
+  n = 300
+  const [s] = buildSessions([
+    req('GET', '/docs/api-keys'),
+    req('GET', '/dl/v/cli.tgz'),
+    req('POST', '/api/device/start'),
+    req('POST', '/api/device/poll', 428),
+    req('POST', '/api/device/poll', 400),
+  ])
+  expect(s!.blockers.map((b) => b.kind)).toEqual(['human_signin'])
+  expect(s!.blockers[0]!.after).toBe('/docs/api-keys')
 })

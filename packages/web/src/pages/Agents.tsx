@@ -45,7 +45,7 @@ export const Agents = () => {
           </thead>
           <tbody>
             {data.agents.map((a) => (
-              <tr key={a.key} className="click" onClick={() => navigate(`/journeys?agent=${encodeURIComponent(a.key)}`)}>
+              <tr key={a.key} className="click" onClick={() => navigate(`/sessions?agent=${encodeURIComponent(a.key)}`)}>
                 <td>
                   <AgentName name={a.label} surface={a.key === 'unnamed' ? undefined : a.surface} />
                   <div className="faint small">{a.operator !== 'unknown' ? a.operator : 'grouped by behaviour'}</div>

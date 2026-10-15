@@ -78,6 +78,7 @@ ${source ? `Current source of ${source.path}:\n<file>\n${source.content}\n</file
 }
 
 export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) => {
+  let draftQueue: Promise<void> = Promise.resolve()
   const { store, analyzer } = ctx
   const env = deps.env ?? process.env
 
@@ -201,7 +202,8 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
     const ids = new Set(found.fix.sessionIds)
     const sessions = found.a.sessions.filter((s) => ids.has(s.id))
     const servePath = found.fix.kind === 'markdown_served_html' || found.fix.kind === 'not_found' ? found.fix.path : found.fix.sourcePage
-    void (async () => {
+    // One draft at a time: Claude Code runs on this machine, and three at once would slow it down.
+    draftQueue = draftQueue.then(async () => {
       const latest = () => store.fix(workspaceId, key) ?? record
       try {
         const gh = github(found.settings)
@@ -233,7 +235,7 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
         next.updatedAt = ctx.now()
         store.saveFix(next)
       }
-    })()
+    })
     return { ok: true, provider: providerStatus(found.settings.llm, env).find((p) => p.id === provider)?.label ?? provider }
   }
 

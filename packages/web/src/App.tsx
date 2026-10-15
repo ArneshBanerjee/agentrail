@@ -1,13 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link } from './components.tsx'
+import { Link, Toasts } from './components.tsx'
 import { api, ApiError, connectLive, session, useApi, useDays, useLiveState, useLocation } from './lib.ts'
 import { Agents } from './pages/Agents.tsx'
 import { Arrivals } from './pages/Arrivals.tsx'
 import { FixDetail, Fixes } from './pages/Fixes.tsx'
 import { Intents } from './pages/Intents.tsx'
-import { Journey, Journeys } from './pages/Journeys.tsx'
 import { Overview } from './pages/Overview.tsx'
 import { Revenue } from './pages/Revenue.tsx'
+import { Session, Sessions } from './pages/Sessions.tsx'
 import { Settings } from './pages/Settings.tsx'
 import { Setup } from './pages/Setup.tsx'
 import type { Me } from './types.ts'
@@ -16,7 +16,7 @@ const NAV = [
   { to: '/', label: 'Overview' },
   { to: '/arrivals', label: 'Arrivals' },
   { to: '/agents', label: 'Agents' },
-  { to: '/journeys', label: 'Journeys' },
+  { to: '/sessions', label: 'Sessions' },
   { to: '/intents', label: 'Intents' },
   { to: '/revenue', label: 'Revenue' },
   { to: '/fixes', label: 'Fixes' },
@@ -34,8 +34,9 @@ const route = (path: string): { title: string; crumb?: string; node: ReactNode }
       return { title: 'Arrivals', node: <Arrivals /> }
     case 'agents':
       return { title: 'Agents', node: <Agents /> }
+    case 'sessions':
     case 'journeys':
-      return second ? { title: 'Journeys', crumb: 'One session', node: <Journey id={decodeURIComponent(second)} /> } : { title: 'Journeys', node: <Journeys /> }
+      return second ? { title: 'Sessions', crumb: 'One session', node: <Session id={decodeURIComponent(second)} /> } : { title: 'Sessions', node: <Sessions /> }
     case 'intents':
       return { title: 'Intents', node: <Intents /> }
     case 'revenue':
@@ -121,7 +122,7 @@ export const App = () => {
               value={me.data.workspaceId}
               onChange={(e) => {
                 session.setWorkspace(e.target.value)
-                location.includes('/journeys/') || location.includes('/fixes/') ? (window.location.href = '/') : window.location.reload()
+                location.includes('/sessions/') || location.includes('/fixes/') ? (window.location.href = '/') : window.location.reload()
               }}
             >
               {me.data.workspaces.map((w) => (
@@ -154,6 +155,7 @@ export const App = () => {
             ))}
           </div>
         </header>
+        <Toasts />
         <main className="page">{me.error && !(me.error instanceof ApiError && me.error.status === 401) ? <div className="banner warn">Cannot reach the Agentrail server: {me.error.message}</div> : node}</main>
       </div>
     </div>

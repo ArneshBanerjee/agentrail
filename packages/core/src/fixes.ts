@@ -21,6 +21,8 @@ export type FixCandidate = {
   readonly status?: number
   /** The page most of these agents read just before the problem. */
   readonly sourcePage?: string
+  /** A short name for where the fix goes: "API keys guide", "/docs/quickstart", "create_meter_event". */
+  readonly where?: string
   /** Endpoints or paths this problem showed up on. */
   readonly paths: readonly string[]
   readonly sessionsLost: number
@@ -117,9 +119,10 @@ export const rankFixes = (sessions: readonly Session[], options: RankOptions): F
       ...(b.tool ? { tool: b.tool } : {}),
       ...(b.status ? { status: b.status } : {}),
       ...(sourcePage ? { sourcePage } : {}),
+      ...(whereOf(b, sourcePage) ? { where: whereOf(b, sourcePage)! } : {}),
       paths: [...g.paths],
       sessionsLost: g.lost.length,
-      dropShare: beforeStep && dropBefore.get(beforeStep) ? g.lost.length / dropBefore.get(beforeStep)! : 0,
+      dropShare: beforeStep && dropBefore.get(beforeStep) ? (stepCounts.get(beforeStep) ?? 0) / dropBefore.get(beforeStep)! : 0,
       sessionsAffected: g.affected.size,
       ...(beforeStep ? { beforeStep } : {}),
       conversionPast,
@@ -135,11 +138,21 @@ export const rankFixes = (sessions: readonly Session[], options: RankOptions): F
   )
 }
 
-/** "/docs/api-keys" reads better as "the api keys guide" in a sentence. */
+/** "/docs/api-keys" as a heading: "API keys guide". */
+export const pageTitle = (path: string) => {
+  const name = pageName(path).replace(/^the /, '')
+  return name.charAt(0).toUpperCase() + name.slice(1)
+}
+
+/** "/docs/api-keys" reads better as "the API keys guide" in a sentence. */
 export const pageName = (path: string) => {
   const last = path.split('/').filter(Boolean).at(-1)
-  return last ? `the ${last.replace(/[-_]+/g, ' ').replace(/\.(md|mdx|html)$/, '')} guide` : 'the docs'
+  const words = last?.replace(/\.(md|mdx|html)$/, '').split(/[-_]+/).map((w) => (/^(api|sdk|cli|mcp|url|id|oauth)$/i.test(w) ? w.toUpperCase().replace('OAUTH', 'OAuth') : w))
+  return words ? `the ${words.join(' ')} guide` : 'the docs'
 }
+
+const whereOf = (b: Blocker, sourcePage: string | undefined) =>
+  b.kind === 'failed_call' && sourcePage ? pageTitle(sourcePage) : b.kind === 'mcp_tool_error' ? b.tool : b.kind === 'human_signin' || b.kind === 'payment_failed' ? undefined : b.path
 
 const actionFor = (b: Blocker, sourcePage: string | undefined, target: string | undefined): string => {
   switch (b.kind) {

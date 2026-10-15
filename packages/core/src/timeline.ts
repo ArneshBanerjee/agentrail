@@ -3,7 +3,8 @@ import type { FunnelStep } from './funnel.ts'
 import type { Session } from './journey.ts'
 import { DEFAULT_STEP_RULES, stepName, type StepRule } from './steps.ts'
 
-export type TimelineMark = { readonly kind: 'step' | 'blocked' | 'stopped'; readonly label: string }
+/** `warning` is a problem that did not stop the agent by itself, such as HTML served to a markdown reader. */
+export type TimelineMark = { readonly kind: 'step' | 'blocked' | 'warning' | 'stopped'; readonly label: string }
 
 export type TimelineItem = {
   readonly eventId: string
@@ -84,7 +85,7 @@ export const timeline = (
     while (end < names.length - 1 && names[end + 1] === 'poll') end++
     return end > start ? `poll ${i - start + 1} / ${end - start + 1}` : name
   })
-  const blocked = new Set(session.blockers.map((b) => b.eventId))
+  const blocked = new Map(session.blockers.map((b) => [b.eventId, b.kind]))
   // A step is marked on the first event at its time. Steps implied by a later one have no event of
   // their own and are not marked, so the timeline shows only what happened.
   const stepAt = new Map<number, string[]>()
@@ -106,8 +107,12 @@ export const timeline = (
       for (const label of stepAt.get(e.ts) ?? []) marks.push({ kind: 'step', label })
       if (stepAt.has(e.ts)) marked.add(e.ts)
     }
-    if (blocked.has(e.id)) marks.push({ kind: 'blocked', label: 'Blocked' })
-    if (session.stoppedAt && e === last) marks.push({ kind: 'stopped', label: 'Stopped' })
+    const problem = blocked.get(e.id)
+    if (problem === 'markdown_served_html') marks.push({ kind: 'warning', label: 'HTML, not markdown' })
+    else if (problem === 'not_found') marks.push({ kind: 'blocked', label: 'Not found' })
+    else if (problem) marks.push({ kind: 'blocked', label: 'Blocked' })
+    const converted = (options.conversionStep ?? 'first_payment') in session.reached
+    if (session.stoppedAt && e === last && !converted && options.live !== true) marks.push({ kind: 'stopped', label: 'Stopped' })
     const goal = chain.find((s) => session.reached[s.id] === undefined || session.reached[s.id]! >= e.ts) ?? chain.at(-1)
     return {
       eventId: e.id,
