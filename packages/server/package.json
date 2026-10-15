@@ -1,0 +1,16 @@
+{
+  "name": "@agentrail/server",
+  "version": "0.1.0",
+  "description": "Agentrail server: ingest, storage, dashboard API, fixes and the agent runner.",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@agentrail/core": "^0.1.0",
+    "@hono/node-server": "^2.1.5",
+    "hono": "^4.13.13"
+  }
+}

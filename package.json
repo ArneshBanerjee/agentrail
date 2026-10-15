@@ -1,0 +1,31 @@
+{
+  "name": "agentrail",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Open-source analytics for the agent customer journey: which AI agents use your product, what they came to do, where they stop, and what to fix.",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/core",
+    "packages/sdk",
+    "packages/server",
+    "packages/web"
+  ],
+  "scripts": {
+    "check": "npm run typecheck && npm test",
+    "typecheck": "tsc -p packages/core",
+    "test": "vitest run",
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build -w @agentrail/web",
+    "start": "node packages/server/src/main.ts",
+    "seed": "node packages/server/src/seed.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
+  }
+}

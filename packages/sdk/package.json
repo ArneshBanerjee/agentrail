@@ -1,0 +1,14 @@
+{
+  "name": "@agentrail/sdk",
+  "version": "0.1.0",
+  "description": "Collectors for Agentrail: HTTP middleware, a track API and an MCP server wrapper.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./mcp": "./src/mcp.ts"
+  },
+  "dependencies": {
+    "@agentrail/core": "^0.1.0"
+  }
+}

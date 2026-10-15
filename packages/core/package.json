@@ -1,0 +1,13 @@
+{
+  "name": "@agentrail/core",
+  "version": "0.1.0",
+  "description": "Pure logic for Agentrail: events, attribution, redaction, journeys, funnels, intents, revenue and fixes.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  }
+}
