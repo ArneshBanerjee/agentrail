@@ -155,6 +155,11 @@ export type ClaudeCodeOptions = {
   readonly tools?: readonly string[]
   /** Tool permissions granted without asking, such as `Bash(curl *)`. */
   readonly allowedTools?: readonly string[]
+  /**
+   * `dontAsk` (the default) refuses anything not allowed. `auto` lets Claude Code's own classifier
+   * approve safe commands, which is how people run it, and what a test run should match.
+   */
+  readonly permissionMode?: 'dontAsk' | 'auto'
   readonly cwd?: string
   readonly timeoutMs?: number
   /** Structured output: Claude Code validates its reply against this and returns it apart. */
@@ -180,7 +185,7 @@ export const runClaudeCode = (prompt: string, system: string, o: ClaudeCodeOptio
       '--no-session-persistence',
       '--strict-mcp-config',
       '--permission-mode',
-      'dontAsk',
+      o.permissionMode ?? 'dontAsk',
       '--tools',
       (o.tools ?? []).join(','),
       '--append-system-prompt',

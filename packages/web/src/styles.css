@@ -251,6 +251,7 @@ pre.code { background: var(--panel-2); border: 1px solid var(--line); border-rad
 .liverow .clock { font-family: var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
 .liverow .intent { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .liverow .sub { font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
+.liverow > :nth-child(3) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 900px) { .liverow { grid-template-columns: 14px 1fr auto; } .liverow > :nth-child(3), .liverow > :nth-child(5) { display: none; } }
 
 .stepper { display: flex; gap: 0; margin: 18px 0 4px; overflow-x: auto; }

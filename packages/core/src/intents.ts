@@ -85,14 +85,27 @@ export const assignIntents = (
   }
 
   // Each leftover goes to its most shared word, so the groups that come out are the words agents
-  // actually use. A word used once is no group, and those tasks fall into "Other".
+  // actually use. A word used once is no group, and those tasks fall into "Other". Among equally
+  // shared words the earliest wins, because a task names its subject first: "refund the charge".
   const frequency = new Map<string, number>()
   for (const l of leftovers) for (const w of l.words) frequency.set(w, (frequency.get(w) ?? 0) + 1)
+  // The label is the word as agents wrote it, not its stem: "Usage", not "Usag".
+  const spelling = new Map<string, Map<string, number>>()
+  for (const l of leftovers) {
+    for (const raw of l.session.intent!.toLowerCase().split(/[^a-z0-9]+/)) {
+      const st = stem(raw)
+      const forms = spelling.get(st) ?? new Map<string, number>()
+      forms.set(raw, (forms.get(raw) ?? 0) + 1)
+      spelling.set(st, forms)
+    }
+  }
+  const labelOf = (st: string) => titleCase([...(spelling.get(st) ?? new Map([[st, 1]])).entries()].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)[0]![0])
   for (const l of leftovers) {
     const top = l.words
-      .filter((w) => (frequency.get(w) ?? 0) >= 2)
-      .sort((a, b) => (frequency.get(b) ?? 0) - (frequency.get(a) ?? 0) || a.localeCompare(b))[0]
-    assigned.set(l.session.id, top ? { id: `kw:${top}`, label: titleCase(top) } : { id: 'other', label: 'Other' })
+      .map((w, position) => ({ w, position }))
+      .filter(({ w }) => (frequency.get(w) ?? 0) >= 2)
+      .sort((a, b) => (frequency.get(b.w) ?? 0) - (frequency.get(a.w) ?? 0) || a.position - b.position)[0]?.w
+    assigned.set(l.session.id, top ? { id: `kw:${top}`, label: labelOf(top) } : { id: 'other', label: 'Other' })
   }
   return assigned
 }

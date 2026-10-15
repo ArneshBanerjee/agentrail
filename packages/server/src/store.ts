@@ -20,6 +20,8 @@ export type WorkspaceSettings = {
   intentLabels: Record<string, string>
   /** Draft the top fixes in the background when a model is available. On unless set to false. */
   autoDraft?: boolean
+  /** Minutes of quiet that end a session. 30 by default. */
+  sessionGapMinutes?: number
 }
 
 export const DEFAULT_SETTINGS: WorkspaceSettings = {

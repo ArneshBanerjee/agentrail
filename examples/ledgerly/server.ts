@@ -19,7 +19,7 @@ const APPROVE_AFTER = Number(process.env.APPROVE_AFTER ?? 3)
 
 const keys = new Map<string, string>() // api key -> account
 const devices = new Map<string, { polls: number; account: string; key?: string }>()
-const meters = new Map<string, { id: string; event_name: string; events: number; value: number }>()
+const meters = new Map<string, { id: string; account: string; event_name: string; events: number; value: number }>()
 
 const agentrail = new Agentrail({
   key: process.env.AGENTRAIL_KEY ?? 'missing-key',
@@ -163,13 +163,13 @@ const app = async (req: IncomingMessage, res: ServerResponse) => {
     if (!account) return
     if (req.method === 'POST' && path === '/v1/meters') {
       const body = await readJson(req)
-      const meter = { id: `mtr_${randomBytes(4).toString('hex')}`, event_name: String(body.event_name ?? 'api_call'), events: 0, value: 0 }
+      const meter = { id: `mtr_${randomBytes(4).toString('hex')}`, account, event_name: String(body.event_name ?? 'api_call'), events: 0, value: 0 }
       meters.set(meter.id, meter)
       return send(res, 200, meter)
     }
     if (req.method === 'POST' && path === '/v1/billing/meter_events') {
       const body = await readJson(req)
-      const meter = [...meters.values()].find((m) => m.event_name === body.event_name)
+      const meter = [...meters.values()].reverse().find((m) => m.account === account && m.event_name === body.event_name)
       if (!meter) return send(res, 400, { error: { message: `No meter for event_name "${String(body.event_name)}". Create one first.` } })
       meter.events++
       meter.value += Number(body.value ?? 1)
@@ -178,7 +178,7 @@ const app = async (req: IncomingMessage, res: ServerResponse) => {
     const summary = /^\/v1\/billing\/meters\/([^/]+)\/event_summaries$/.exec(path)
     if (req.method === 'GET' && summary) {
       const meter = meters.get(summary[1]!)
-      return meter ? send(res, 200, { meter: meter.id, events: meter.events, value: meter.value }) : send(res, 404, { error: { message: 'No such meter.' } })
+      return meter && meter.account === account ? send(res, 200, { meter: meter.id, events: meter.events, value: meter.value }) : send(res, 404, { error: { message: 'No such meter.' } })
     }
     if (req.method === 'POST' && path === '/v1/subscriptions') {
       const body = await readJson(req)

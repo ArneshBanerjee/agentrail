@@ -61,7 +61,7 @@ const header = (h: Headers, name: string) => h.get(name) ?? undefined
 const INTERNAL = 'x-agentrail-internal'
 
 const IDENTIFY_HINT =
-  'If you are an AI agent, please send a User-Agent that names you and your version, such as "claude-code/2.1.0" or "codex/0.46.0", so this product can support your agent.'
+  'If you are an AI agent, please send a User-Agent that names your agent, such as claude-code, codex or cursor, followed by "/" and your client version if you know it, so this product can support your agent.'
 
 /** One client, one form: `::ffff:1.2.3.4` and `1.2.3.4` must hash the same. */
 const normalizeIp = (ip: string | undefined) => (ip?.startsWith('::ffff:') ? ip.slice(7) : ip)
@@ -419,9 +419,25 @@ export class Agentrail {
           void send(res, own)
           return
         }
+        // Keep the start of an error body, so a journey can say why a call failed. Nothing is kept
+        // for successful responses, and at most 2 KB for a failed one.
+        const out = res as unknown as { write: (...a: unknown[]) => boolean; end: (...a: unknown[]) => unknown }
+        const chunks: Uint8Array[] = []
+        let kept = 0
+        const keep = (chunk: unknown) => {
+          if (res.statusCode < 400 || kept >= 2048 || chunk == null || typeof chunk === 'function') return
+          const bytes = typeof chunk === 'string' ? Buffer.from(chunk) : (chunk as Uint8Array)
+          chunks.push(bytes.subarray(0, 2048 - kept))
+          kept += bytes.length
+        }
+        const write = out.write.bind(res)
+        const end = out.end.bind(res)
+        out.write = (...a: unknown[]) => (keep(a[0]), write(...a))
+        out.end = (...a: unknown[]) => (keep(a[0]), end(...a))
         res.on('finish', () => {
           const contentType = res.getHeader('content-type')
-          const response = new Response(null, { status: res.statusCode < 200 ? 200 : res.statusCode, headers: contentType ? { 'content-type': String(contentType) } : {} })
+          const body = chunks.length > 0 ? Buffer.concat(chunks) : null
+          const response = new Response(res.statusCode === 204 || res.statusCode === 304 ? null : body, { status: res.statusCode < 200 ? 200 : res.statusCode, headers: contentType ? { 'content-type': String(contentType) } : {} })
           void this.observe(request, response, startedAt, remote)
         })
         next?.()

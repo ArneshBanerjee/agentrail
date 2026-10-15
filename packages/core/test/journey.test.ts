@@ -126,3 +126,15 @@ test('the funnel counts each step by agent, with the drop from the step before',
   expect(rows[2]!.dropFromPrevious).toBe(0.5)
   expect(rows[2]!.byAgent).toEqual({ cursor: 1 })
 })
+
+test('a payment for an account made in a test run joins that run, not real traffic', () => {
+  const events = [
+    ev({ kind: 'request', ts: s(0), path: '/docs', status: 200, userAgent: CODEX, runId: 'run-9', accountId: 'acct-run' }),
+    ev({ kind: 'identify', ts: s(3), source: 'track', accountId: 'acct-run', ipHash: 'shared-ip' }),
+    ev({ kind: 'payment', ts: s(5), source: 'track', accountId: 'acct-run', amount: 2900 }),
+    ev({ kind: 'request', ts: s(1), path: '/docs', status: 200, userAgent: CODEX, ipHash: 'shared-ip' }),
+  ]
+  const sessions = buildSessions(events)
+  expect(sessions).toHaveLength(2)
+  expect(sessions.find((x) => x.runId)).toMatchObject({ runId: 'run-9', payments: 1 })
+})

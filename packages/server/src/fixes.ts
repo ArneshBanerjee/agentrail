@@ -316,7 +316,8 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
     if (!agent) return c.json({ error: 'No agent is available. Sign in to Claude Code on the server, or add an API key in Settings.' }, 400)
     const targetUrl = siteBase(workspaceId, found.settings)
     if (!targetUrl) return c.json({ error: 'Set the preview URL for test runs in Settings.' }, 400)
-    const ids = new Set(found.fix.sessionIds)
+    // The task agents had when they hit this. Lost sessions first, else any that hit it and got past.
+    const ids = new Set(found.fix.sessionIds.length > 0 ? found.fix.sessionIds : found.fix.affectedSessionIds)
     const intents = groupIntents(found.a.sessions.filter((s) => ids.has(s.id)))
     const task = intents[0]?.quotes[0] ?? `Get past this problem: ${found.fix.title}.`
     const n = Math.min(Math.max(Math.round(body.runs ?? 5), 1), 50)
@@ -391,7 +392,7 @@ const runQueue = async (store: Store, ctx: AppContext, runs: RunRecord[], target
         run.measuredBy = 'collector'
         const last = [...funnel].reverse().find((id) => reached.has(id))
         if (last) run.reachedStep = last
-        run.converted = step ? reached.has(step) : (outcome.selfReport?.success ?? false)
+        run.converted = reached.has(step ?? settings.conversionStep)
       } else {
         run.measuredBy = 'self-report'
         run.converted = outcome.selfReport?.success ?? false

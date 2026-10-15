@@ -23,6 +23,7 @@ export const sessionSummary = (s: Session, now: number, funnel: readonly FunnelS
     landingPath: s.landingPath,
     intent: s.intent,
     inferredIntent: s.inferredIntent,
+    intentVia: s.intentVia,
     searches: s.searches,
     reached: Object.keys(s.reached),
     stoppedAt: s.stoppedAt,

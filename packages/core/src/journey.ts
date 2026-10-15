@@ -54,6 +54,8 @@ export type Session = {
    * `intent` so intent groups and their numbers only count what agents said.
    */
   readonly inferredIntent?: string
+  /** How the task reached the product: "docs finder", "intake endpoint", "MCP", "your product". */
+  readonly intentVia?: string
   readonly searches: readonly string[]
   /** Step id to the time it was reached. */
   readonly reached: Readonly<Record<string, number>>
@@ -163,10 +165,16 @@ const joinByIdentity = (events: readonly StoredEvent[]): StoredEvent[][] => {
     if (ra !== rb) parent.set(ra, rb)
   }
 
+  // Accounts used inside a test run. Their other events (a sign-in, a payment from the product) join
+  // the run through the account only, never through an address that real traffic shares.
+  const runAccounts = new Set(events.flatMap((e) => (e.runId && e.accountId ? [`${e.siteId}:${e.accountId}`] : [])))
+
   const idsOf = (e: StoredEvent): string[] => {
     // A test run is its own world. Joining it to real traffic through a shared address would put
     // the runner's sessions in the live funnel.
-    if (e.runId) return [`run:${e.runId}`]
+    // An account a test run signed up with belongs to that run, so its payments join the run too.
+    if (e.runId) return e.accountId ? [`run:${e.runId}`, `acct:${e.siteId}:${e.accountId}`] : [`run:${e.runId}`]
+    if (e.accountId && runAccounts.has(`${e.siteId}:${e.accountId}`)) return [`acct:${e.siteId}:${e.accountId}`]
     const ids: string[] = []
     if (e.sessionHint) ids.push(`hint:${e.siteId}:${e.sessionHint}`)
     if (e.accountId) ids.push(`acct:${e.siteId}:${e.accountId}`)
@@ -333,6 +341,14 @@ const toSession = (events: readonly StoredEvent[], agent: Attribution, funnel: r
   const landing = events.find((e) => e.kind === 'request' && e.path)?.path
   const intent = events.find((e) => e.kind === 'intent' && e.text)?.text
   const inferredIntent = intent ? undefined : inferIntent(events)
+  const intentEvent = events.find((e) => e.kind === 'intent' && e.text)
+  const intentVia = !intentEvent
+    ? undefined
+    : intentEvent.source === 'mcp'
+      ? 'MCP'
+      : intentEvent.source === 'intake'
+        ? intentEvent.path?.includes('/docs/find') ? 'docs finder' : 'intake endpoint'
+        : 'your product'
   const searches = events.flatMap((e) => {
     const s = searchText(e)
     return s ? [s] : []
@@ -351,6 +367,7 @@ const toSession = (events: readonly StoredEvent[], agent: Attribution, funnel: r
     ...(landing ? { landingPath: landing } : {}),
     ...(intent ? { intent } : {}),
     ...(inferredIntent ? { inferredIntent } : {}),
+    ...(intentVia ? { intentVia } : {}),
     searches,
     reached,
     ...(stoppedAt ? { stoppedAt } : {}),

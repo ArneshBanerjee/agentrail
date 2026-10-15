@@ -39,6 +39,8 @@ export type FixCandidate = {
   readonly revenuePerConversion: number
   readonly monthlyValueAtRisk: number
   readonly sessionIds: readonly string[]
+  /** Every session that hit this problem, including the ones that got past it. */
+  readonly affectedSessionIds: readonly string[]
   readonly byAgent: Readonly<Record<string, number>>
   readonly proposal: Proposal
 }
@@ -129,6 +131,7 @@ export const rankFixes = (sessions: readonly Session[], options: RankOptions): F
       revenuePerConversion,
       monthlyValueAtRisk: Math.round((g.lost.length * conversionPast * revenuePerConversion) / months),
       sessionIds: g.lost.map((s) => s.id),
+      affectedSessionIds: [...g.affected],
       byAgent,
       proposal: propose(b, options.knownPaths ?? [], sourcePage),
     })

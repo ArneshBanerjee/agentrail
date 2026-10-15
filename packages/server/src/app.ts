@@ -259,6 +259,7 @@ export const createApp = (deps: AppDeps) => {
       stripe: keep(body.stripe, current.stripe, 'webhookSecret'),
       runner: { ...current.runner, ...(body.runner ?? {}) },
       ...(body.autoDraft !== undefined ? { autoDraft: body.autoDraft } : {}),
+      ...(body.sessionGapMinutes !== undefined ? { sessionGapMinutes: Math.max(1, Number(body.sessionGapMinutes) || 30) } : {}),
     }
     store.saveSettings(workspaceId, updated)
     return c.json(maskSettings(updated))

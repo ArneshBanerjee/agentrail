@@ -215,7 +215,7 @@ export const Session = ({ id }: { id: string }) => {
           )}
         </div>
         <div className="muted small">
-          via {data.discovery.via} · {time(data.startedAt)}
+          {data.intentVia ? `task via ${data.intentVia} · ` : ''}found you via {data.discovery.via} · {time(data.startedAt)}
         </div>
         <div className="stepper">
           {data.stepper.map((s) => (

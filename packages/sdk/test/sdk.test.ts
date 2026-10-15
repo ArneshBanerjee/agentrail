@@ -91,6 +91,12 @@ test('Node and Express middleware records on finish with the real status', async
   const mw = ar.node()
   const server = createServer((req, res) => {
     mw(req, res, () => {
+      if (req.url === '/v1/meters') {
+        res.statusCode = 401
+        res.setHeader('content-type', 'application/json')
+        res.end(JSON.stringify({ error: { message: 'X-Api-Key rejected. Send Authorization: Bearer <key>.' } }))
+        return
+      }
       res.statusCode = req.url === '/missing' ? 404 : 200
       res.setHeader('content-type', 'text/html')
       res.end('<html></html>')
@@ -99,6 +105,7 @@ test('Node and Express middleware records on finish with the real status', async
   await new Promise<void>((r) => server.listen(0, r))
   const port = (server.address() as AddressInfo).port
   await fetch(`http://127.0.0.1:${port}/missing`, { headers: { 'user-agent': 'Claude-User', accept: 'text/markdown' } })
+  await fetch(`http://127.0.0.1:${port}/v1/meters`, { method: 'POST', headers: { 'user-agent': 'curl/8.7.1' } })
   const intake = await fetch(`http://127.0.0.1:${port}/.well-known/agent-task`, { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'Claude-User' }, body: JSON.stringify({ task: 'Find pricing' }) })
   expect(intake.status).toBe(202)
   await new Promise((r) => setTimeout(r, 20))
@@ -106,6 +113,7 @@ test('Node and Express middleware records on finish with the real status', async
   await ar.flush()
   expect(sent()).toEqual([
     expect.objectContaining({ kind: 'request', path: '/missing', status: 404, accept: 'text/markdown', contentType: 'text/html', ip: '127.0.0.1' }),
+    expect.objectContaining({ kind: 'request', method: 'POST', path: '/v1/meters', status: 401, error: 'X-Api-Key rejected. Send Authorization: Bearer <key>.' }),
     expect.objectContaining({ kind: 'intent', text: 'Find pricing' }),
   ])
 })

@@ -64,7 +64,11 @@ export const FixDialog = ({ fixKey, onClose, onPublished }: { fixKey: string; on
           </button>
         </header>
         <div className="body">
-          {f ? (
+          {f && f.sessionsLost === 0 ? (
+            <p style={{ marginTop: 6 }}>
+              <b>{fmt.n(f.sessionsAffected)} {f.sessionsAffected === 1 ? 'agent' : 'agents'}</b> hit this and got past it with extra calls. {record?.draft?.summary ?? f.proposal.summary}
+            </p>
+          ) : f ? (
             <p style={{ marginTop: 6 }}>
               <b>{fmt.n(f.sessionsLost)} agents</b> {f.kind === 'failed_call' ? 'failed at their' : 'stopped before'} {f.beforeStep ? label(f.beforeStep) : 'the next step'}.{' '}
               {f.dropShare > 0 ? (

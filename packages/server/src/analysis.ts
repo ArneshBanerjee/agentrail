@@ -49,7 +49,7 @@ export class Analyzer {
     const settings = this.store.settings(workspaceId)
     const span = window.to - window.from
     const events = this.store.events(siteIds, window.from - span - LOOKBACK, window.to)
-    const all = buildSessions(events, { funnel: settings.funnel }).filter((s) => (options.runs ? true : !s.runId))
+    const all = buildSessions(events, { funnel: settings.funnel, ...(settings.sessionGapMinutes ? { gapMs: settings.sessionGapMinutes * 60_000 } : {}) }).filter((s) => (options.runs ? true : !s.runId))
     const sessions = all.filter((s) => s.startedAt >= window.from && s.startedAt <= window.to)
     const previous = all.filter((s) => s.startedAt >= window.from - span && s.startedAt < window.from)
     const knownPaths = [

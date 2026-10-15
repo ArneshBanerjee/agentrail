@@ -43,6 +43,7 @@ export type SessionSummary = {
   landingPath?: string
   intent?: string
   inferredIntent?: string
+  intentVia?: string
   searches: string[]
   reached: string[]
   stoppedAt?: string
