@@ -10,7 +10,10 @@
   },
   "dependencies": {
     "@agentrail/core": "^0.1.0",
+    "@anthropic-ai/sdk": "^0.134.0",
+    "@google/genai": "^2.30.0",
     "@hono/node-server": "^2.1.5",
-    "hono": "^4.13.13"
+    "hono": "^4.13.13",
+    "openai": "^7.34.0"
   }
 }

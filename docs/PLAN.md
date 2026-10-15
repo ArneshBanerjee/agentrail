@@ -66,9 +66,9 @@ agent runner (F16). Each one goes through one interface, `server/src/llm`, with 
 
 | Provider | Needs | How it runs |
 |---|---|---|
-| Anthropic | `ANTHROPIC_API_KEY` | Messages API through `fetch` |
-| OpenAI | `OPENAI_API_KEY` | Chat Completions API through `fetch`. Also works with any OpenAI-compatible endpoint, such as a local Ollama |
-| Gemini | `GEMINI_API_KEY` | `generateContent` API through `fetch` |
+| Anthropic | `ANTHROPIC_API_KEY` | Messages API, Claude Opus 5.5 by default, with server-side fallback on a refusal |
+| OpenAI | `OPENAI_API_KEY` | Chat Completions API. Also works with any OpenAI-compatible endpoint, such as a local Ollama |
+| Gemini | `GEMINI_API_KEY` | `generateContent` API |
 | Claude Code | A signed-in `claude` CLI on the server machine. No API key | `claude -p` runs headless in the background as a child process, with JSON output. It uses the person's existing Claude plan |
 
 Claude Code is the default when the `claude` binary is found and no key is set, because many people
@@ -76,7 +76,9 @@ have a Claude plan but no API budget. The agent runner can also drive Claude Cod
 Gemini CLI if installed) as the agent under test, so "test the fix on real agents" works without
 any API key.
 
-No provider SDK is added. Each API is one HTTP call, and the CLI is one child process.
+Each API provider uses its official SDK. Claude Code is one child process: `claude -p --output-format
+json`, with no saved session, no MCP servers from the machine, and `--permission-mode dontAsk`, so a
+tool that is not allowed is refused instead of waiting for a person.
 
 Without any provider, every feature still works except the LLM draft: fixes show the detected
 problem and a rule-based change where one exists, and intents use keyword groups.
@@ -134,6 +136,9 @@ Each one has a reason. Nothing else is added without a reason in this table.
 | `hono`, `@hono/node-server` | server | Small HTTP framework that also runs in Workers |
 | `react`, `react-dom`, `vite`, `@vitejs/plugin-react` | web | Dashboard |
 | `@modelcontextprotocol/sdk` | sdk (peer) | The MCP wrapper wraps this package |
+| `@anthropic-ai/sdk` | server | Anthropic provider. The official SDK, so typed errors and new API fields come with updates |
+| `openai` | server | OpenAI provider, and any OpenAI-compatible server such as Ollama |
+| `@google/genai` | server | Gemini provider |
 
 Built-in instead of a package: SQLite (`node:sqlite`), Ed25519 and HMAC (`node:crypto`), HTTP client
 (`fetch`). Node 22.5 or newer is required.
