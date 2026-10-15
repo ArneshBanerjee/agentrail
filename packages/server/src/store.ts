@@ -38,7 +38,8 @@ export type FixRecord = {
   readonly workspaceId: string
   readonly key: string
   status: FixStatus
-  draft?: { file: string; before?: string; after: string; summary: string; provider: string }
+  /** `servePath` is the URL path the SDK serves `after` at, to agents, once the fix is published. */
+  draft?: { file: string; servePath?: string; title?: string; before?: string; after: string; summary: string; provider: string }
   drafting?: boolean
   draftError?: string
   prUrl?: string

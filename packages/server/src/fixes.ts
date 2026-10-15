@@ -25,8 +25,8 @@ export const DRAFT_SCHEMA = {
   name: 'draft',
   schema: {
     type: 'object',
-    properties: { file: { type: 'string' }, summary: { type: 'string' }, content: { type: 'string' } },
-    required: ['file', 'summary', 'content'],
+    properties: { file: { type: 'string' }, title: { type: 'string' }, summary: { type: 'string' }, content: { type: 'string' } },
+    required: ['file', 'title', 'summary', 'content'],
     additionalProperties: false,
   },
 }
@@ -36,7 +36,7 @@ export const DRAFT_SCHEMA = {
  * The rest is for a model that wraps it anyway. A drafted page holds its own code fences, so a
  * fence is only a last resort.
  */
-export const parseDraft = (text: string): { file?: string; summary?: string; content?: string } | undefined => {
+export const parseDraft = (text: string): { file?: string; title?: string; summary?: string; content?: string } | undefined => {
   const fenced = /^\s*```(?:json)?\s*([\s\S]*)```\s*$/.exec(text)?.[1]
   for (const candidate of [text, fenced]) {
     if (!candidate) continue
@@ -44,7 +44,7 @@ export const parseDraft = (text: string): { file?: string; summary?: string; con
     const end = candidate.lastIndexOf('}')
     if (start < 0 || end < start) continue
     try {
-      return JSON.parse(candidate.slice(start, end + 1)) as { file?: string; summary?: string; content?: string }
+      return JSON.parse(candidate.slice(start, end + 1)) as { file?: string; title?: string; summary?: string; content?: string }
     } catch {
       // Try the next candidate.
     }
@@ -56,7 +56,7 @@ const DRAFT_SYSTEM = `You fix documentation and product surfaces so AI agents ca
 You get one problem that stopped agents, with evidence from their sessions, and the current source of the page they read.
 Change only what fixes the problem. Keep the author's style, structure and wording everywhere else.
 Never invent API behaviour that the evidence does not support. If the evidence is not enough, make the smallest safe change and say so in the summary.
-Reply with one JSON object only: {"file": "<path>", "summary": "<one sentence for a reviewer>", "content": "<the complete new file>"}`
+Reply with one JSON object only: {"file": "<path>", "title": "<what the change does, as an instruction, such as 'Fix the authentication sample in the API keys guide'>", "summary": "<one sentence for a reviewer>", "content": "<the complete new file>"}`
 
 export const draftPrompt = (fix: FixCandidate, sessions: readonly Session[], source: { path: string; content: string } | undefined) => {
   const evidence = sessions.slice(0, 5).map((s) => {
@@ -188,8 +188,11 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
         const parsed = parseDraft(reply)
         if (!parsed?.content) throw new LlmError('The model did not return a change in the expected format.')
         const next = latest()
+        const servePath = found.fix.kind === 'markdown_served_html' || found.fix.kind === 'not_found' ? found.fix.path : found.fix.sourcePage
         next.draft = {
           file: source?.path ?? parsed.file ?? `${(found.fix.sourcePage ?? 'docs/agent-fix').replace(/^\//, '')}.md`,
+          ...(servePath ? { servePath } : {}),
+          ...(parsed.title ? { title: parsed.title } : {}),
           ...(source ? { before: source.content } : {}),
           after: parsed.content,
           summary: parsed.summary ?? found.fix.proposal.summary,
@@ -235,11 +238,13 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
       } catch (error) {
         return c.json({ error: `Could not open the pull request: ${(error as Error).message}` }, 502)
       }
-      message = 'Pull request opened. The before and after comparison starts now.'
+      message = record.draft.servePath ? 'Live for agents now, and a pull request is open for your docs.' : 'Pull request opened. The before and after comparison starts now.'
     } else if (rulePatch && found.fix.kind === 'not_found') {
       message = 'Published. Collectors with applyFixes on now serve this redirect.'
     } else if (record.draft) {
-      message = 'Marked as published. Connect GitHub in Settings to open pull requests.'
+      message = record.draft.servePath
+        ? 'Live for agents now: collectors with applyFixes serve the corrected page. Connect GitHub to also open a pull request.'
+        : 'Marked as published. Connect GitHub in Settings to open pull requests.'
     } else {
       return c.json({ error: 'Draft the change first.' }, 400)
     }
@@ -282,23 +287,30 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
     return c.json({ message: `${n} ${phase} runs queued on ${agent.label}.`, runs: queued }, 202)
   })
 
-  /** For the SDK's `applyFixes`: published redirect fixes for the workspace of this ingest key. */
-  app.get('/v1/fixes/redirects', (c) => {
+  /**
+   * For the SDK's `applyFixes`: what is live for the workspace of this ingest key. Redirects for
+   * missing pages, and corrected pages that the SDK serves to agents until the docs change lands.
+   */
+  app.get('/v1/fixes/live', (c) => {
     const key = c.req.header('x-agentrail-key')
     const site = key ? store.siteByKey(key) : undefined
     if (!site) return c.json({ error: 'unknown ingest key' }, 401)
-    const published = store.fixes(site.workspaceId).filter((r) => r.status === 'published' && r.key.startsWith('not_found:'))
-    const redirects = published.flatMap((r) => {
-      const found = findFix(site.workspaceId, r.key, 365)
-      const patch = found?.fix.proposal.patch
-      if (!patch) return []
-      try {
-        return JSON.parse(patch.content) as { from: string; to: string; status: number }[]
-      } catch {
-        return []
-      }
-    })
-    return c.json({ redirects })
+    const published = store.fixes(site.workspaceId).filter((r) => r.status === 'published')
+    const redirects = published
+      .filter((r) => r.key.startsWith('not_found:'))
+      .flatMap((r) => {
+        const patch = findFix(site.workspaceId, r.key, 365)?.fix.proposal.patch
+        if (!patch) return []
+        try {
+          return JSON.parse(patch.content) as { from: string; to: string; status: number }[]
+        } catch {
+          return []
+        }
+      })
+    const pages = published.flatMap((r) =>
+      r.draft?.servePath ? [{ path: r.draft.servePath, content: r.draft.after, contentType: 'text/markdown; charset=utf-8' }] : [],
+    )
+    return c.json({ redirects, pages })
   })
 }
 

@@ -86,7 +86,7 @@ test('drafting with Claude Code, then publishing as a GitHub pull request', asyn
     if (url.endsWith('/pulls')) return json({ html_url: 'https://github.com/acme/docs/pull/7' }, 201)
     return json({ message: 'unexpected' }, 500)
   }) as typeof fetch
-  const { send, app, get, store, workspace } = withFixes({ fetcher })
+  const { send, app, get, store, workspace, site } = withFixes({ fetcher })
   store.saveSettings(workspace.id, { ...store.settings(workspace.id), github: { repo: 'acme/docs', token: 'ghp_test', branch: 'main', docsRoot: '' } })
   await send(traffic())
   const path = `/api/fixes/${encodeURIComponent(AUTH_KEY)}`
@@ -106,6 +106,9 @@ test('drafting with Claude Code, then publishing as a GitHub pull request', asyn
   expect(put.body.branch).toMatch(/^agentrail\/fix-/)
   expect(github.find((g) => g.url.endsWith('/pulls'))!.body).toMatchObject({ base: 'main' })
   expect((await get(`${path}?days=7`)).body.impact).toBeDefined()
+  // The corrected page is live for agents at once, at the path they read before failing.
+  const live: any = await (await app.request('/v1/fixes/live', { headers: { 'x-agentrail-key': site.ingestKey } })).json()
+  expect(live.pages).toEqual([{ path: '/docs/api-keys', content: drafted.draft.after, contentType: 'text/markdown; charset=utf-8' }])
 })
 
 test('a missing page publishes as a redirect that the SDK then serves', async () => {

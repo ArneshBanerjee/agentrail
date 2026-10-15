@@ -54,6 +54,7 @@ export const describe = (e: StoredEvent): string => {
 
 const wire = (e: StoredEvent): string => {
   if (e.kind === 'request') return `${e.method ?? 'GET'} ${e.path ?? '/'}${e.status ? ` ${e.status}` : ''}${e.error ? ` · ${e.error}` : ''}`
+  if ((e.kind === 'intent' || e.kind === 'search') && e.path) return `${e.method ?? 'POST'} ${e.path}${e.status ? ` ${e.status}` : ''}`
   if (e.kind === 'intent' || e.kind === 'search') return `"${e.text ?? ''}"`
   if (e.kind === 'mcp_connect') return e.mcpClient ? `from ${e.mcpClient}${e.mcpClientVersion ? ` ${e.mcpClientVersion}` : ''}` : ''
   return describe(e)

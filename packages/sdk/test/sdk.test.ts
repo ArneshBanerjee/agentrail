@@ -110,6 +110,62 @@ test('Node and Express middleware records on finish with the real status', async
   ])
 })
 
-test('llms.txt line', () => {
-  expect(llmsTxtLine('https://docs.tripe.test/')).toContain('https://docs.tripe.test/.well-known/agent-task')
+test('llms.txt line points agents at the docs finder', () => {
+  expect(llmsTxtLine('https://docs.tripe.test/')).toContain('https://docs.tripe.test/api/docs/find')
+})
+
+const LLMS = `# Ledgerly
+> Payments API.
+
+## Docs
+- [Usage-based billing](/docs/billing/usage-based): Charge for what customers use, with meters and meter events.
+- [API keys](/docs/api-keys): Authenticate your requests.
+- [Refunds](https://docs.ledgerly.test/docs/refunds): Refund a charge in full or in part.
+- [Status page](https://status.example.com): Outside link.
+`
+
+test('the docs finder answers from llms.txt, and the query becomes the intent', async () => {
+  const { ar, sent } = collector()
+  const app = ar.handler(async (req: Request) =>
+    new URL(req.url).pathname === '/llms.txt' ? new Response(LLMS) : new Response('page'),
+  )
+  const realFetch = globalThis.fetch
+  globalThis.fetch = (async (input: string | URL | Request) => app(new Request(String(input)))) as typeof fetch
+  try {
+    const res = await app(
+      new Request('https://docs.ledgerly.test/api/docs/find', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'user-agent': 'Claude-User (claude-code/2.1.288)' },
+        body: JSON.stringify({ query: 'set up usage-based billing with meter events for our API' }),
+      }),
+    )
+    const body = (await res.json()) as { results: { path: string; url: string }[] }
+    expect(body.results[0]).toMatchObject({ path: '/docs/billing/usage-based', url: 'https://docs.ledgerly.test/docs/billing/usage-based' })
+    expect(body.results.map((r) => r.path)).not.toContain('https://status.example.com')
+    const get = await app(new Request('https://docs.ledgerly.test/api/docs/find?q=refund%20a%20charge', { headers: { 'user-agent': 'curl/8.7.1' } }))
+    expect(((await get.json()) as { results: { path: string }[] }).results[0]!.path).toBe('/docs/refunds')
+  } finally {
+    globalThis.fetch = realFetch
+  }
+  await ar.flush()
+  const intents = sent().filter((e) => e.kind === 'intent')
+  expect(intents.map((e) => e.text)).toEqual(['set up usage-based billing with meter events for our API', 'refund a charge'])
+  expect(intents[0]).toMatchObject({ source: 'intake', method: 'POST', path: '/api/docs/find', status: 200, userAgent: 'Claude-User (claude-code/2.1.288)' })
+  // The finder records the intent and not a second request event for the same call.
+  expect(sent().filter((e) => e.path === '/api/docs/find' && e.kind === 'request')).toHaveLength(0)
+})
+
+test('published corrected pages go to agents as markdown, and people still get the page', async () => {
+  const fake = (async (url: string) => {
+    if (String(url).endsWith('/v1/fixes/live')) return Response.json({ redirects: [], pages: [{ path: '/docs/api-keys', content: '# API keys\nUse Authorization: Bearer.', contentType: 'text/markdown; charset=utf-8' }] })
+    return new Response('{}', { status: 202 })
+  }) as typeof fetch
+  const ar = new Agentrail({ key: 'k', flushIntervalMs: 0, applyFixes: true, fetch: fake })
+  await ar.refreshFixes(true)
+  const app = ar.handler(async () => new Response('<html>old page</html>', { headers: { 'content-type': 'text/html' } }))
+  const agent = await app(new Request('https://docs.x.test/docs/api-keys', { headers: { 'user-agent': 'Claude-User (claude-code/2.1.288)' } }))
+  expect(await agent.text()).toContain('Authorization: Bearer')
+  expect(agent.headers.get('x-agentrail-fix')).toBe('live')
+  const person = await app(new Request('https://docs.x.test/docs/api-keys', { headers: { 'user-agent': CHROME } }))
+  expect(await person.text()).toBe('<html>old page</html>')
 })

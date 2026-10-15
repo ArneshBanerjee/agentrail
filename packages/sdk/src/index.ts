@@ -1,4 +1,5 @@
-import { isAgentTraffic, type IncomingEvent } from '@agentrail/core'
+import { DOCS_FINDER_PATH, isAgentTraffic, type IncomingEvent } from '@agentrail/core'
+import { findPages, parseLlmsTxt, queryOf, type DocPage } from './finder.ts'
 
 export type EventInput = Partial<IncomingEvent> & Pick<IncomingEvent, 'kind'>
 
@@ -26,6 +27,11 @@ export type AgentrailOptions = {
   readonly trustProxy?: boolean
   /** Where agents can declare their task. Set to `false` to turn it off. */
   readonly intakePath?: string | false
+  /**
+   * The docs finder (see `finder.ts`). On by default at `/api/docs/find`, with pages read from your
+   * own `/llms.txt`. Pass `pages` to list them yourself, or `false` to turn it off.
+   */
+  readonly docsFinder?: { readonly path?: string; readonly pages?: readonly DocPage[] | (() => readonly DocPage[] | Promise<readonly DocPage[]>) } | false
   /** Links a request to an account, for example from its API key. */
   readonly accountOf?: (request: Request) => string | undefined
   /** Paths never recorded. Static assets by default. */
@@ -33,17 +39,21 @@ export type AgentrailOptions = {
   readonly fetch?: typeof fetch
   readonly onError?: (error: unknown) => void
   /**
-   * Apply fixes published in Agentrail that the middleware can serve itself, such as a redirect
-   * from a path agents guess to the page they need. Refreshed every minute.
+   * Serve fixes published in Agentrail: redirects from paths agents guess, and corrected pages.
+   * Corrected pages go to agents only, as markdown, until the change reaches your own docs.
+   * Refreshed every minute.
    */
   readonly applyFixes?: boolean
 }
 
 export type Redirect = { readonly from: string; readonly to: string; readonly status: number }
+export type LivePage = { readonly path: string; readonly content: string; readonly contentType: string }
 
 const STATIC = /\.(?:js|mjs|css|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|map)$/i
 
 export const DEFAULT_INTAKE_PATH = '/.well-known/agent-task'
+export { DOCS_FINDER_PATH }
+export { findPages, parseLlmsTxt, type DocPage } from './finder.ts'
 
 const header = (h: Headers, name: string) => h.get(name) ?? undefined
 
@@ -72,7 +82,9 @@ export class Agentrail {
   private readonly endpoint: string
   private readonly base: string
   private redirects = new Map<string, Redirect>()
-  private redirectsAt = 0
+  private livePages = new Map<string, LivePage>()
+  private fixesAt = 0
+  private pages: { at: number; list: readonly DocPage[] } | undefined
 
   constructor(options: AgentrailOptions) {
     this.options = options
@@ -133,16 +145,17 @@ export class Agentrail {
     if (this.queue.length > 0) await this.flush()
   }
 
-  /** Published redirects, fetched at most once a minute. A failed fetch keeps the last list. */
+  /** Published fixes, fetched at most once a minute. A failed fetch keeps the last list. */
   async refreshFixes(force = false): Promise<void> {
     if (!this.options.applyFixes) return
-    if (!force && Date.now() - this.redirectsAt < 60_000) return
-    this.redirectsAt = Date.now()
+    if (!force && Date.now() - this.fixesAt < 60_000) return
+    this.fixesAt = Date.now()
     try {
-      const res = await (this.options.fetch ?? fetch)(`${this.base}/v1/fixes/redirects`, { headers: { 'x-agentrail-key': this.options.key } })
+      const res = await (this.options.fetch ?? fetch)(`${this.base}/v1/fixes/live`, { headers: { 'x-agentrail-key': this.options.key } })
       if (!res.ok) return
-      const list = (await res.json()) as { redirects: Redirect[] }
-      this.redirects = new Map(list.redirects.map((r) => [r.from, r]))
+      const live = (await res.json()) as { redirects: Redirect[]; pages: LivePage[] }
+      this.redirects = new Map(live.redirects.map((r) => [r.from, r]))
+      this.livePages = new Map(live.pages.map((p) => [p.path, p]))
     } catch (error) {
       this.options.onError?.(error)
     }
@@ -152,6 +165,10 @@ export class Agentrail {
   redirectFor(path: string): Redirect | undefined {
     void this.refreshFixes()
     return this.redirects.get(path) ?? this.redirects.get(path.replace(/\/$/, ''))
+  }
+
+  private livePageFor(path: string): LivePage | undefined {
+    return this.livePages.get(path) ?? this.livePages.get(path.replace(/\/$/, ''))
   }
 
   /** Flush and stop the timer. Call before a short-lived process exits. */
@@ -214,6 +231,17 @@ export class Agentrail {
     }
   }
 
+  private actorOf(request: Request, remoteAddress?: string) {
+    const base = this.requestEvent(request, undefined, Date.now(), remoteAddress)
+    return {
+      ...(base.userAgent ? { userAgent: base.userAgent } : {}),
+      ...(base.ip ? { ip: base.ip } : {}),
+      ...(base.sessionHint ? { sessionHint: base.sessionHint } : {}),
+      ...(base.runId ? { runId: base.runId } : {}),
+      host: base.host,
+    }
+  }
+
   private async intake(request: Request, remoteAddress?: string): Promise<Response> {
     if (request.method === 'GET') {
       return Response.json({
@@ -222,30 +250,81 @@ export class Agentrail {
         body: { task: 'string' },
       })
     }
-    let task: string | undefined
-    const type = request.headers.get('content-type') ?? ''
-    try {
-      if (/json/i.test(type)) {
-        const body = (await request.json()) as { task?: unknown; intent?: unknown }
-        const value = body.task ?? body.intent
-        task = typeof value === 'string' ? value : undefined
-      } else {
-        task = (await request.text()) || undefined
-      }
-    } catch {
-      task = undefined
-    }
+    const task = await queryOf(request)
     if (!task) return Response.json({ error: 'send {"task": "..."}' }, { status: 400 })
-    const base = this.requestEvent(request, undefined, Date.now(), remoteAddress)
-    this.record({
-      kind: 'intent',
-      source: 'intake',
-      text: task.slice(0, 4000),
-      ...(base.userAgent ? { userAgent: base.userAgent } : {}),
-      ...(base.ip ? { ip: base.ip } : {}),
-      ...(base.sessionHint ? { sessionHint: base.sessionHint } : {}),
-    })
+    this.record({ kind: 'intent', source: 'intake', text: task.slice(0, 4000), method: request.method, path: new URL(request.url).pathname, status: 202, ...this.actorOf(request, remoteAddress) })
     return Response.json({ ok: true }, { status: 202 })
+  }
+
+  private finderPath(): string | undefined {
+    return this.options.docsFinder === false ? undefined : (this.options.docsFinder?.path ?? DOCS_FINDER_PATH)
+  }
+
+  /** The pages the finder searches: given in options, or read from the site's own llms.txt. */
+  private async docPages(origin: string): Promise<readonly DocPage[]> {
+    const given = this.options.docsFinder ? this.options.docsFinder.pages : undefined
+    if (given) return typeof given === 'function' ? await given() : given
+    if (this.pages && Date.now() - this.pages.at < 5 * 60_000) return this.pages.list
+    try {
+      const res = await fetch(`${origin}/llms.txt`, { headers: { accept: 'text/plain', 'user-agent': 'agentrail-docs-finder' } })
+      const list = res.ok ? parseLlmsTxt(await res.text(), origin) : []
+      this.pages = { at: Date.now(), list }
+      return list
+    } catch {
+      return this.pages?.list ?? []
+    }
+  }
+
+  private async finder(request: Request, remoteAddress?: string): Promise<Response> {
+    const url = new URL(request.url)
+    const query = await queryOf(request)
+    if (!query) {
+      return Response.json(
+        { usage: `POST ${url.pathname} with {"query": "<what you are trying to do>"}, or GET ${url.pathname}?q=...`, results: [] },
+        { status: request.method === 'GET' ? 200 : 400 },
+      )
+    }
+    const results = findPages(query, await this.docPages(url.origin)).map((r) => ({ ...r, url: `${url.origin}${r.path}` }))
+    this.record({ kind: 'intent', source: 'intake', text: query.slice(0, 4000), method: request.method, path: url.pathname, status: 200, ...this.actorOf(request, remoteAddress) })
+    return Response.json({
+      query,
+      results,
+      ...(results.length === 0 ? { hint: 'Nothing matched. Read /llms.txt for the full list of pages.' } : { hint: 'Read the first result first.' }),
+    })
+  }
+
+  /**
+   * What this middleware answers itself, before the product sees the request: the intake, the docs
+   * finder, published redirects, and corrected pages for agents.
+   */
+  async intercept(request: Request, remoteAddress?: string): Promise<Response | undefined> {
+    const path = new URL(request.url).pathname
+    const intakePath = this.options.intakePath === false ? undefined : (this.options.intakePath ?? DEFAULT_INTAKE_PATH)
+    if (intakePath && path === intakePath) return this.intake(request, remoteAddress)
+    const finderPath = this.finderPath()
+    if (finderPath && path === finderPath) return this.finder(request, remoteAddress)
+    const redirect = this.redirectFor(path)
+    if (redirect) return new Response(null, { status: redirect.status, headers: { location: redirect.to } })
+    const page = request.method === 'GET' ? this.livePageFor(path) : undefined
+    if (page && isAgentTraffic({ userAgent: header(request.headers, 'user-agent'), accept: header(request.headers, 'accept'), path })) {
+      return new Response(page.content, { headers: { 'content-type': page.contentType, 'x-agentrail-fix': 'live' } })
+    }
+    return undefined
+  }
+
+  /** Intake and finder answers are recorded as the intent they carry, not as a second request. */
+  private recordsItself(path: string) {
+    const intakePath = this.options.intakePath === false ? undefined : (this.options.intakePath ?? DEFAULT_INTAKE_PATH)
+    return path === intakePath || path === this.finderPath()
+  }
+
+  private async observe(request: Request, response: Response, startedAt: number, remote: string | undefined) {
+    const path = new URL(request.url).pathname
+    if ((this.options.ignore ?? STATIC).test(path) || this.recordsItself(path)) return
+    const event = this.requestEvent(request, response, startedAt, remote)
+    if (!this.wanted(event)) return
+    const error = await this.errorOf(response)
+    this.queue.push(error ? { ...event, error } : event)
   }
 
   /**
@@ -259,25 +338,9 @@ export class Agentrail {
     return async (request: Request, ...rest: A): Promise<Response> => {
       const startedAt = Date.now()
       const remote = hooks.remoteAddress?.(request, ...rest)
-      const path = new URL(request.url).pathname
-      const intakePath = this.options.intakePath === false ? undefined : (this.options.intakePath ?? DEFAULT_INTAKE_PATH)
-      if (intakePath && path === intakePath) {
-        const res = await this.intake(request, remote)
-        hooks.waitUntil?.(...rest)?.(this.flush())
-        return res
-      }
-      const redirect = this.redirectFor(path)
-      const response = redirect
-        ? new Response(null, { status: redirect.status, headers: { location: redirect.to } })
-        : await handle(request, ...rest)
-      if (!(this.options.ignore ?? STATIC).test(path)) {
-        const event = this.requestEvent(request, response, startedAt, remote)
-        if (this.wanted(event)) {
-          const error = await this.errorOf(response)
-          this.queue.push(error ? { ...event, error } : event)
-          hooks.waitUntil?.(...rest)?.(this.flush())
-        }
-      }
+      const response = (await this.intercept(request.clone(), remote)) ?? (await handle(request, ...rest))
+      await this.observe(request, response, startedAt, remote)
+      if (this.queue.length > 0) hooks.waitUntil?.(...rest)?.(this.flush())
       return response
     }
   }
@@ -294,21 +357,14 @@ export class Agentrail {
   hono() {
     return async (c: { req: { raw: Request }; res: Response; env?: unknown }, next: () => Promise<void>): Promise<Response | void> => {
       const startedAt = Date.now()
-      const path = new URL(c.req.raw.url).pathname
-      const redirect = this.redirectFor(path)
-      if (redirect) {
-        const response = new Response(null, { status: redirect.status, headers: { location: redirect.to } })
-        const event = this.requestEvent(c.req.raw, response, startedAt)
-        if (this.wanted(event)) this.queue.push(event)
-        return response
+      const remote = (c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined)?.incoming?.socket?.remoteAddress
+      const own = await this.intercept(c.req.raw.clone(), remote)
+      if (own) {
+        await this.observe(c.req.raw, own, startedAt, remote)
+        return own
       }
       await next()
-      if ((this.options.ignore ?? STATIC).test(path)) return
-      const remote = (c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined)?.incoming?.socket?.remoteAddress
-      const event = this.requestEvent(c.req.raw, c.res, startedAt, remote)
-      if (!this.wanted(event)) return
-      const error = await this.errorOf(c.res)
-      this.queue.push(error ? { ...event, error } : event)
+      await this.observe(c.req.raw, c.res, startedAt, remote)
     }
   }
 
@@ -319,6 +375,13 @@ export class Agentrail {
   node() {
     type Req = { method?: string | undefined; url?: string | undefined; headers: Record<string, string | string[] | undefined>; socket?: { remoteAddress?: string | undefined } }
     type Res = { statusCode: number; getHeader(name: string): unknown; on(event: 'finish', fn: () => void): unknown }
+    type Out = { statusCode: number; setHeader(n: string, v: string): void; end(b?: string | Uint8Array): void }
+    const send = async (res: Res, response: Response) => {
+      const out = res as unknown as Out
+      out.statusCode = response.status
+      response.headers.forEach((v, k) => out.setHeader(k, v))
+      out.end(new Uint8Array(await response.arrayBuffer()))
+    }
     return (req: Req, res: Res, next?: (error?: unknown) => void) => {
       const startedAt = Date.now()
       const host = (req.headers.host as string | undefined) ?? 'localhost'
@@ -326,47 +389,42 @@ export class Agentrail {
       for (const [k, v] of Object.entries(req.headers)) if (v !== undefined) headers.set(k, Array.isArray(v) ? v.join(', ') : v)
       const request = new Request(`http://${host}${req.url ?? '/'}`, { method: req.method ?? 'GET', headers })
       const path = new URL(request.url).pathname
-      const intakePath = this.options.intakePath === false ? undefined : (this.options.intakePath ?? DEFAULT_INTAKE_PATH)
-      if (intakePath && path === intakePath) {
+      const remote = req.socket?.remoteAddress
+      const finish = (response: Response) => {
+        res.on('finish', () => void this.observe(request, response, startedAt, remote))
+      }
+      if (this.recordsItself(path)) {
+        // These read a body, which Node gives as a stream.
         const chunks: Uint8Array[] = []
         const stream = req as unknown as { on(e: 'data', f: (c: Uint8Array) => void): void; on(e: 'end', f: () => void): void }
         stream.on('data', (c) => chunks.push(c))
         stream.on('end', () => {
-          const body = req.method === 'POST' ? Buffer.concat(chunks) : undefined
+          const body = req.method !== 'GET' && req.method !== 'HEAD' && chunks.length > 0 ? Buffer.concat(chunks) : undefined
           const withBody = new Request(request.url, { method: request.method, headers, ...(body ? { body } : {}) })
-          void this.intake(withBody, req.socket?.remoteAddress).then(async (r) => {
-            const out = res as unknown as { statusCode: number; setHeader(n: string, v: string): void; end(b: string): void }
-            out.statusCode = r.status
-            out.setHeader('content-type', 'application/json')
-            out.end(await r.text())
-          })
+          void this.intercept(withBody, remote).then((r) => r && send(res, r))
         })
         return
       }
-      const redirect = this.redirectFor(path)
-      if (redirect) {
-        const out = res as unknown as { statusCode: number; setHeader(n: string, v: string): void; end(): void }
-        out.statusCode = redirect.status
-        out.setHeader('location', redirect.to)
+      void this.intercept(request, remote).then((own) => {
+        if (own) {
+          finish(own)
+          void send(res, own)
+          return
+        }
         res.on('finish', () => {
-          const event = this.requestEvent(request, new Response(null, { status: redirect.status }), startedAt, req.socket?.remoteAddress)
-          if (this.wanted(event)) this.queue.push(event)
+          const contentType = res.getHeader('content-type')
+          const response = new Response(null, { status: res.statusCode < 200 ? 200 : res.statusCode, headers: contentType ? { 'content-type': String(contentType) } : {} })
+          void this.observe(request, response, startedAt, remote)
         })
-        out.end()
-        return
-      }
-      res.on('finish', () => {
-        if ((this.options.ignore ?? STATIC).test(path)) return
-        const contentType = res.getHeader('content-type')
-        const response = new Response(null, { status: res.statusCode < 200 ? 200 : res.statusCode, headers: contentType ? { 'content-type': String(contentType) } : {} })
-        const event = this.requestEvent(request, response, startedAt, req.socket?.remoteAddress)
-        if (this.wanted(event)) this.queue.push(event)
+        next?.()
       })
-      next?.()
     }
   }
 }
 
-/** A line for `/llms.txt` that tells agents where to declare their task. */
-export const llmsTxtLine = (baseUrl: string, intakePath = DEFAULT_INTAKE_PATH) =>
-  `- [Declare your task](${baseUrl.replace(/\/$/, '')}${intakePath}): POST {"task": "..."} with the task you were given, without personal data, so we can improve these docs for agents.`
+/**
+ * A line for `/llms.txt` that points agents at the docs finder. Agents follow it because it finds
+ * the right page faster than reading every page, and the query they send is their task.
+ */
+export const llmsTxtLine = (baseUrl: string, finderPath = DOCS_FINDER_PATH) =>
+  `- [Find the right page for your task](${baseUrl.replace(/\/$/, '')}${finderPath}): POST {"query": "<what you are trying to do>"} and get back the pages that answer it. Start here.`
