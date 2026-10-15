@@ -1,4 +1,5 @@
 import { AGENT_PATHS, AGENTS, PROGRAMMATIC_CLIENTS, type AgentRule, type Surface } from './agents.ts'
+import { versionIn } from './steps.ts'
 
 /**
  * How sure the name is.
@@ -19,11 +20,14 @@ export type Attribution = {
   readonly label: Label
   /** One sentence a person can check: the header, client name or behaviour behind the name. */
   readonly evidence: string
+  /** The agent's version, when its user agent or MCP client says it. */
+  readonly version?: string
 }
 
 export type Signals = {
   readonly userAgent?: string | undefined
   readonly mcpClient?: string | undefined
+  readonly mcpClientVersion?: string | undefined
   readonly verifiedOperator?: string | undefined
   readonly accept?: string | undefined
   readonly path?: string | undefined
@@ -70,14 +74,22 @@ export const attribute = (signals: Signals, rules: readonly AgentRule[] = AGENTS
   if (signals.mcpClient) {
     const client = signals.mcpClient.toLowerCase()
     const rule = rules.find((r) => r.mcpClients?.includes(client))
-    if (rule) return fromRule(rule, 'declared', `MCP client name "${signals.mcpClient}"`)
+    if (rule) {
+      const a = fromRule(rule, 'declared', `MCP client name "${signals.mcpClient}"`)
+      return signals.mcpClientVersion ? { ...a, version: signals.mcpClientVersion } : a
+    }
   }
 
   if (ua) {
     for (const rule of rules) {
       for (const pattern of rule.userAgent ?? []) {
         const match = pattern.exec(ua)
-        if (match) return fromRule(rule, 'declared', `User agent says "${productToken(ua, match.index)}"`)
+        if (match) {
+          const token = productToken(ua, match.index)
+          const version = versionIn(ua, token)
+          const a = fromRule(rule, 'declared', `User agent says "${token}"`)
+          return version ? { ...a, version } : a
+        }
       }
     }
   }

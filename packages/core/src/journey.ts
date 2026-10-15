@@ -96,7 +96,7 @@ export const buildSessions = (events: readonly StoredEvent[], options: SessionOp
   const relevant: StoredEvent[] = []
   for (const e of events) {
     const a = attribute(
-      { userAgent: e.userAgent, mcpClient: e.mcpClient, verifiedOperator: e.verifiedOperator, accept: e.accept, path: e.path },
+      { userAgent: e.userAgent, mcpClient: e.mcpClient, mcpClientVersion: e.mcpClientVersion, verifiedOperator: e.verifiedOperator, accept: e.accept, path: e.path },
       rules,
     )
     attributionOf.set(e.id, a)
@@ -197,6 +197,7 @@ const SEARCH_ENGINES = /(^|\.)(google|bing|duckduckgo|yahoo|brave|kagi|ecosia|ba
 
 export const discover = (first: StoredEvent): Discovery => {
   if (first.kind === 'mcp_connect' || first.kind === 'mcp_tool') return { via: 'your MCP server' }
+  if (first.kind === 'intent' && first.source === 'intake') return { via: 'docs finder' }
   if (first.kind === 'search') return { via: 'your docs search' }
   const path = first.path ?? ''
   if (path.startsWith('/llms')) return { via: 'llms.txt', detail: path }
@@ -290,9 +291,10 @@ const toSession = (events: readonly StoredEvent[], agent: Attribution, funnel: r
   const last = events.at(-1)!
   const reachedMap = reachedSteps(events, funnel)
   const reached = Object.fromEntries(reachedMap)
-  const stoppedAt = funnel.find((s) => !reachedMap.has(s.id))?.id
+  // An independent step such as MCP connected is never where a journey stopped.
+  const stoppedAt = funnel.find((s) => !s.independent && !reachedMap.has(s.id))?.id
   const blockers = findBlockers(events)
-  const lastReachedAt = Math.max(...reachedMap.values())
+  const lastReachedAt = Math.max(...funnel.filter((s) => !s.independent && reachedMap.has(s.id)).map((s) => reachedMap.get(s.id)!))
   const stoppedBy = stoppedAt ? blockers.filter((b) => b.at >= lastReachedAt).at(-1) ?? blockers.at(-1) : undefined
   const paid = events.filter((e) => e.kind === 'payment' && e.ok !== false)
   const accountIds = [...new Set(events.flatMap((e) => (e.accountId ? [e.accountId] : [])))]

@@ -11,6 +11,9 @@ import type { Blocker, BlockerKind, Session } from './journey.ts'
 export type FixCandidate = {
   readonly key: string
   readonly kind: BlockerKind
+  /** What to do, as an instruction: "Fix the authentication sample in the API keys guide". */
+  readonly action: string
+  /** What is wrong: "Agents fail auth: X-Api-Key rejected". */
   readonly title: string
   readonly detail: string
   readonly path?: string
@@ -21,6 +24,11 @@ export type FixCandidate = {
   /** Endpoints or paths this problem showed up on. */
   readonly paths: readonly string[]
   readonly sessionsLost: number
+  /**
+   * Of all sessions that stopped before the same step, the share this problem explains. "52% of the
+   * drop before the first payment comes from one page."
+   */
+  readonly dropShare: number
   /** Sessions that hit this blocker, whether or not it stopped them. */
   readonly sessionsAffected: number
   /** The funnel step these sessions never reached. */
@@ -83,6 +91,10 @@ export const rankFixes = (sessions: readonly Session[], options: RankOptions): F
     if (s.stoppedBy && !(conversionStep in s.reached)) groups.get(s.stoppedBy.key)?.lost.push(s)
   }
 
+  // The drop before each step, so a fix can say what share of it is its own.
+  const dropBefore = new Map<string, number>()
+  for (const s of sessions) if (s.stoppedAt && !(conversionStep in s.reached)) dropBefore.set(s.stoppedAt, (dropBefore.get(s.stoppedAt) ?? 0) + 1)
+
   const candidates: FixCandidate[] = []
   for (const [key, g] of groups) {
     const stepCounts = new Map<string, number>()
@@ -94,9 +106,11 @@ export const rankFixes = (sessions: readonly Session[], options: RankOptions): F
     for (const s of g.lost) byAgent[s.agent.name] = (byAgent[s.agent.name] ?? 0) + 1
     const b = g.blocker
     const sourcePage = [...g.after.entries()].sort((x, y) => y[1] - x[1])[0]?.[0]
+    const target = b.kind === 'not_found' && b.path ? closestPath(b.path, options.knownPaths ?? []) : undefined
     candidates.push({
       key,
       kind: b.kind,
+      action: actionFor(b, sourcePage, target),
       title: TITLES[b.kind](b),
       detail: b.detail,
       ...(b.path ? { path: b.path } : {}),
@@ -105,6 +119,7 @@ export const rankFixes = (sessions: readonly Session[], options: RankOptions): F
       ...(sourcePage ? { sourcePage } : {}),
       paths: [...g.paths],
       sessionsLost: g.lost.length,
+      dropShare: beforeStep && dropBefore.get(beforeStep) ? g.lost.length / dropBefore.get(beforeStep)! : 0,
       sessionsAffected: g.affected.size,
       ...(beforeStep ? { beforeStep } : {}),
       conversionPast,
@@ -118,6 +133,31 @@ export const rankFixes = (sessions: readonly Session[], options: RankOptions): F
   return candidates.sort(
     (a, b) => b.monthlyValueAtRisk - a.monthlyValueAtRisk || b.sessionsLost - a.sessionsLost || b.sessionsAffected - a.sessionsAffected,
   )
+}
+
+/** "/docs/api-keys" reads better as "the api keys guide" in a sentence. */
+export const pageName = (path: string) => {
+  const last = path.split('/').filter(Boolean).at(-1)
+  return last ? `the ${last.replace(/[-_]+/g, ' ').replace(/\.(md|mdx|html)$/, '')} guide` : 'the docs'
+}
+
+const actionFor = (b: Blocker, sourcePage: string | undefined, target: string | undefined): string => {
+  switch (b.kind) {
+    case 'failed_call':
+      return b.status === 401 || b.status === 403
+        ? `Fix the authentication sample in ${sourcePage ? pageName(sourcePage) : 'the docs'}`
+        : `Fix the ${b.path ?? 'API'} example in ${sourcePage ? pageName(sourcePage) : 'the docs'}`
+    case 'not_found':
+      return target ? `Redirect ${b.path} to ${target}` : `Add a page at ${b.path}`
+    case 'markdown_served_html':
+      return `Serve markdown at ${b.path}`
+    case 'mcp_tool_error':
+      return `Clarify what the ${b.tool} tool needs`
+    case 'payment_failed':
+      return 'Document test cards and test mode'
+    case 'human_signin':
+      return 'Let agents finish sign-in'
+  }
 }
 
 /** Edit distance, for matching a missing page to the page the agent most likely wanted. */

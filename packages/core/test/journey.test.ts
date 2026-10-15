@@ -34,7 +34,7 @@ test('docs, CLI, sign-in and API events join into one journey through shared ide
   expect(j!.agent).toMatchObject({ agentId: 'codex', label: 'declared' })
   expect(j!.discovery.via).toBe('llms.txt')
   expect(j!.intent).toBe('Set up usage-based billing with meter events')
-  expect(Object.keys(j!.reached)).toEqual(['discovered', 'evaluated', 'installed', 'signed_in'])
+  expect(Object.keys(j!.reached)).toEqual(['discovered', 'installed', 'signed_in'])
   expect(j!.stoppedAt).toBe('first_api_call')
   expect(j!.stoppedBy).toMatchObject({ kind: 'failed_call', key: 'failed_call:POST /v1/meters:401' })
   expect(j!.blockers).toHaveLength(2)

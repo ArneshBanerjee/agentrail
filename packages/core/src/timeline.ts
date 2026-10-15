@@ -1,11 +1,18 @@
 import type { StoredEvent } from './events.ts'
 import type { FunnelStep } from './funnel.ts'
 import type { Session } from './journey.ts'
+import { DEFAULT_STEP_RULES, stepName, type StepRule } from './steps.ts'
 
 export type TimelineMark = { readonly kind: 'step' | 'blocked' | 'stopped'; readonly label: string }
 
 export type TimelineItem = {
   readonly eventId: string
+  /** The plain name: "read", "sign-in started", "poll 3 / 7". */
+  readonly name: string
+  /** What happened on the wire, under the name: "POST /api/device/poll 200". */
+  readonly detail: string
+  /** The stage the agent was working towards, used as a heading: "Discovery", "Sign-in". */
+  readonly phase: string
   readonly ts: number
   /** Milliseconds since the session started, for the 00:21 style column. */
   readonly offsetMs: number
@@ -45,7 +52,37 @@ export const describe = (e: StoredEvent): string => {
   }
 }
 
-export const timeline = (session: Session, funnel: readonly FunnelStep[]): TimelineItem[] => {
+const wire = (e: StoredEvent): string => {
+  if (e.kind === 'request') return `${e.method ?? 'GET'} ${e.path ?? '/'}${e.status ? ` ${e.status}` : ''}${e.error ? ` · ${e.error}` : ''}`
+  if (e.kind === 'intent' || e.kind === 'search') return `"${e.text ?? ''}"`
+  if (e.kind === 'mcp_connect') return e.mcpClient ? `from ${e.mcpClient}${e.mcpClientVersion ? ` ${e.mcpClientVersion}` : ''}` : ''
+  return describe(e)
+}
+
+const PHASE_DEFAULTS: Record<string, string> = { discovered: 'Discovery', evaluated: 'Discovery', installed: 'Discovery', signed_in: 'Sign-in' }
+const phaseOf = (step: FunnelStep) => step.phase ?? PHASE_DEFAULTS[step.id] ?? step.label
+
+/**
+ * The journey as a person reads it: plain names, grouped by the stage the agent was working
+ * towards, with repeated polls counted ("poll 3 / 7") and, once the session is over, how it ended.
+ */
+export const timeline = (
+  session: Session,
+  funnel: readonly FunnelStep[],
+  options: { readonly rules?: readonly StepRule[]; readonly live?: boolean; readonly conversionStep?: string } = {},
+): TimelineItem[] => {
+  const rules = options.rules ?? DEFAULT_STEP_RULES
+  const chain = funnel.filter((s) => !s.independent)
+  const names = session.events.map((e) => stepName(e, rules))
+  // Number each run of consecutive polls, so a wait for approval reads as one counted thing.
+  const counted = names.map((name, i) => {
+    if (name !== 'poll') return name
+    let start = i
+    while (start > 0 && names[start - 1] === 'poll') start--
+    let end = i
+    while (end < names.length - 1 && names[end + 1] === 'poll') end++
+    return end > start ? `poll ${i - start + 1} / ${end - start + 1}` : name
+  })
   const blocked = new Set(session.blockers.map((b) => b.eventId))
   // A step is marked on the first event at its time. Steps implied by a later one have no event of
   // their own and are not marked, so the timeline shows only what happened.
@@ -62,7 +99,7 @@ export const timeline = (session: Session, funnel: readonly FunnelStep[]): Timel
   }
   const marked = new Set<number>()
   const last = session.events.at(-1)
-  return session.events.map((e) => {
+  const items: TimelineItem[] = session.events.map((e, index) => {
     const marks: TimelineMark[] = []
     if (!marked.has(e.ts)) {
       for (const label of stepAt.get(e.ts) ?? []) marks.push({ kind: 'step', label })
@@ -70,8 +107,12 @@ export const timeline = (session: Session, funnel: readonly FunnelStep[]): Timel
     }
     if (blocked.has(e.id)) marks.push({ kind: 'blocked', label: 'Blocked' })
     if (session.stoppedAt && e === last) marks.push({ kind: 'stopped', label: 'Stopped' })
+    const goal = chain.find((s) => session.reached[s.id] === undefined || session.reached[s.id]! >= e.ts) ?? chain.at(-1)
     return {
       eventId: e.id,
+      name: counted[index]!,
+      detail: wire(e),
+      phase: goal ? phaseOf(goal) : 'Journey',
       ts: e.ts,
       offsetMs: e.ts - session.startedAt,
       text: describe(e),
@@ -80,4 +121,21 @@ export const timeline = (session: Session, funnel: readonly FunnelStep[]): Timel
       marks,
     }
   })
+  if (options.live === false) {
+    const conversion = options.conversionStep ?? 'first_payment'
+    const done = conversion in session.reached
+    const stoppedLabel = funnel.find((s) => s.id === session.stoppedAt)?.label
+    items.push({
+      eventId: `${session.id}:end`,
+      name: 'session ended',
+      detail: done ? 'Integration complete' : stoppedLabel ? `Stopped before ${stoppedLabel.charAt(0).toLowerCase()}${stoppedLabel.slice(1)}` : 'Ended',
+      phase: items.at(-1)?.phase ?? 'Journey',
+      ts: session.endedAt,
+      offsetMs: session.endedAt - session.startedAt,
+      text: 'session ended',
+      kind: 'step',
+      marks: [],
+    })
+  }
+  return items
 }

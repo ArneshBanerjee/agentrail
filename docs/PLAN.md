@@ -39,6 +39,30 @@ Agentrail adds one feature that Scope does not claim:
 
 | F21 | Privacy by default | not stated | Paths, queries, intents and headers pass through `core/redact` before they are stored. IPs are kept only as a keyed hash |
 
+## Demo parity
+
+What the public Journeys demo video (2026-10-14) shows, frame by frame, and what Agentrail does for
+each. The rule from the demo that matters most: a person types a normal task into plain Claude Code,
+with no plugin and no instruction about the product, and the journey still appears, named and with
+its task.
+
+| # | The demo shows | How Agentrail does it |
+|---|---|---|
+| V1 | Plain Claude Code: "set up the best usage-based billing system for me" | Nothing is installed in the agent. Everything is collected on the product's side |
+| V2 | The task appears as "intent declared · POST /api/docs/find · via docs finder" | The SDK serves a docs finder. `llms.txt` points agents to it, and agents use it because it returns the right pages. The query they send is their task |
+| V3 | Sessions page: a Live list with agent, task (or "No intent yet"), host, last step, progress pips, stage and a running clock | Sessions page, Live section, updated over SSE |
+| V4 | Recent sessions with search and Agent, Reached and Intent filters; columns Reached, Steps, Duration, Started | Sessions page, Recent section |
+| V5 | A session: agent and version, Live, host, clock, the task as a quote, "via docs finder" | Session header. The version comes from the user agent |
+| V6 | A step tracker: Discovered, Installed, Signed in, First payment, Second payment, MCP connected, each with its time | Session header stepper |
+| V7 | Steps grouped by phase (Discovery, Sign-in, First payment) with plain names: read, init, sign-in started, poll 3 / 7, subscription created, meter event, usage read, session ended · Integration complete | `core/steps`: names from method, path and status, with rules a workspace can override; grouped by the stage being worked towards |
+| V8 | Every step appears as it happens | The session page follows the live stream |
+| V9 | Overview: Traffic with live count and change, Conversion rate with change in points, Main intent, Biggest fix | Overview cards |
+| V10 | Funnel as stacked columns per agent, with the drop between columns, and MCP connected as its own column | Overview funnel |
+| V11 | Biggest fix opens a dialog: an action title, the problem, "289 agents failed at their first API call. 52% of the drop before the first payment comes from one page", a docs patch marked "In preview", Cancel and Confirm | Fix dialog, with the share of the drop from `core/fixes` |
+| V12 | Confirm, and it is "live in production" | Confirm publishes the patch. The SDK serves the patched page to agents at once, and a GitHub pull request carries it to the real docs |
+| V13 | Afterwards: more agents complete setup, conversion goes up | Before and after on the fix, and the Overview numbers |
+| V14 | Fixes are prepared before anyone asks | The top fixes are drafted in the background when a model is available |
+
 ## How data gets in
 
 All collectors produce the same `AgentEvent` (see `packages/core/src/events.ts`).

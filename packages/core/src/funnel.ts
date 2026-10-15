@@ -12,6 +12,9 @@ export type StepMatch = {
   readonly host?: string
   /** Matches only a successful request (status below 400). */
   readonly ok?: boolean
+  /** A regular expression the path must match, for steps a product only shows as HTTP. */
+  readonly pathPattern?: string
+  readonly method?: string
   /** Matches the n-th successful payment in the session, counting from 1. */
   readonly nthPayment?: number
   /** Matches any event. The first step of most funnels. */
@@ -22,28 +25,62 @@ export type FunnelStep = {
   readonly id: string
   readonly label: string
   readonly match: readonly StepMatch[]
+  /** The heading for steps taken on the way to this one, such as "Sign-in". */
+  readonly phase?: string
+  /**
+   * Counted on its own: it neither implies the steps before it nor is implied by the steps after.
+   * MCP connected is one, because an agent can connect at any point or never.
+   */
+  readonly independent?: boolean
 }
 
+/**
+ * Every step can be reached by a `track()` call, and most can also be seen in plain HTTP: a package
+ * download, a device sign-in that succeeds, a first call to a versioned API. A product with only the
+ * middleware still gets a funnel.
+ */
 export const DEFAULT_FUNNEL: readonly FunnelStep[] = [
-  { id: 'discovered', label: 'Discovered', match: [{ any: true }] },
+  { id: 'discovered', label: 'Discovered', phase: 'Discovery', match: [{ any: true }] },
   {
-    id: 'evaluated',
-    label: 'Read the docs',
+    id: 'installed',
+    label: 'Installed',
+    // The work before an install is finding and reading, which is what a person calls discovery.
+    phase: 'Discovery',
     match: [
-      { kind: 'request', pathPrefix: '/docs', ok: true },
-      { kind: 'request', pathPrefix: '/llms', ok: true },
-      { kind: 'search' },
+      { step: 'installed' },
+      { kind: 'request', method: 'GET', ok: true, pathPattern: '\\.(tgz|tar\\.gz|zip|whl|dmg|pkg|exe|msi|deb|rpm)$|/(dl|download|downloads|releases)/' },
+      { kind: 'request', ok: true, pathPattern: '/cli/init$' },
     ],
   },
-  { id: 'installed', label: 'Installed', match: [{ step: 'installed' }] },
-  { id: 'signed_in', label: 'Signed in', match: [{ step: 'signed_in' }] },
-  { id: 'first_api_call', label: 'First API call', match: [{ step: 'first_api_call' }] },
-  { id: 'first_payment', label: 'First payment', match: [{ nthPayment: 1 }] },
-  { id: 'second_payment', label: 'Second payment', match: [{ nthPayment: 2 }] },
+  {
+    id: 'signed_in',
+    label: 'Signed in',
+    phase: 'Sign-in',
+    match: [{ step: 'signed_in' }, { kind: 'request', method: 'POST', ok: true, pathPattern: '/(device/(poll|token)|oauth/token|login)$' }],
+  },
+  {
+    id: 'first_api_call',
+    label: 'First API call',
+    phase: 'First API call',
+    match: [{ step: 'first_api_call' }, { kind: 'request', ok: true, pathPattern: '^/v\\d+/' }],
+  },
+  { id: 'first_payment', label: 'First payment', phase: 'First payment', match: [{ nthPayment: 1 }] },
+  { id: 'second_payment', label: 'Second payment', phase: 'Second payment', match: [{ nthPayment: 2 }] },
+  { id: 'mcp_connected', label: 'MCP connected', phase: 'MCP', independent: true, match: [{ kind: 'mcp_connect' }] },
 ]
 
 /** The step a session must reach to count as converted. */
 export const DEFAULT_CONVERSION_STEP = 'first_payment'
+
+const patterns = new Map<string, RegExp>()
+const patternOf = (source: string) => {
+  let re = patterns.get(source)
+  if (!re) {
+    re = new RegExp(source, 'i')
+    patterns.set(source, re)
+  }
+  return re
+}
 
 const matches = (m: StepMatch, event: StoredEvent, paymentIndex: number): boolean => {
   if (m.any) return true
@@ -52,6 +89,8 @@ const matches = (m: StepMatch, event: StoredEvent, paymentIndex: number): boolea
   if (m.step !== undefined && event.step !== m.step) return false
   if (m.pathPrefix !== undefined && !(event.path ?? '').startsWith(m.pathPrefix)) return false
   if (m.host !== undefined && event.host !== m.host) return false
+  if (m.method !== undefined && (event.method ?? 'GET').toUpperCase() !== m.method.toUpperCase()) return false
+  if (m.pathPattern !== undefined && !patternOf(m.pathPattern).test(event.path ?? '')) return false
   if (m.ok === true && (event.status ?? 200) >= 400) return false
   if (m.ok === true && event.ok === false) return false
   return true
@@ -83,6 +122,10 @@ export const reachedSteps = (
   for (let i = steps.length - 1; i >= 0; i--) {
     const step = steps[i]!
     const own = direct.get(step.id)
+    if (step.independent) {
+      if (own !== undefined) backwards.push([step.id, own])
+      continue
+    }
     if (own !== undefined) laterTime = laterTime === undefined ? own : Math.min(own, laterTime)
     if (own !== undefined || laterTime !== undefined) backwards.push([step.id, own ?? laterTime!])
   }
