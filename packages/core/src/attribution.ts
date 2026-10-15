@@ -75,13 +75,18 @@ export const attribute = (signals: Signals, rules: readonly AgentRule[] = AGENTS
 
   if (ua) {
     for (const rule of rules) {
-      const hit = rule.userAgent?.find((pattern) => pattern.test(ua))
-      if (hit) return fromRule(rule, 'declared', `User agent matches ${hit.source.replaceAll('\\b', '').replaceAll('\\', '')}`)
+      for (const pattern of rule.userAgent ?? []) {
+        const match = pattern.exec(ua)
+        if (match) return fromRule(rule, 'declared', `User agent says "${productToken(ua, match.index)}"`)
+      }
     }
   }
 
   return infer(signals, ua)
 }
+
+/** The name in a user agent without its version, so "Cursor/1.7.38" and "Cursor/1.8.0" are one piece of evidence. */
+const productToken = (ua: string, at: number) => (/^[^\s;()/]+/.exec(ua.slice(at))?.[0] ?? ua.slice(at)).replace(/[-_ ]+$/, '')
 
 const unnamed = (fingerprint: string, evidence: string, surface: Surface = 'unknown'): Attribution => ({
   agentId: `unnamed:${fingerprint}`,

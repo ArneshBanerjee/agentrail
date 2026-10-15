@@ -9,8 +9,10 @@ process.stdin.on('data', (d) => (input += d))
 process.stdin.on('end', () => {
   const args = process.argv.slice(2)
   if (input.startsWith('Problem:')) {
-    const draft = { file: 'docs/api-keys.md', summary: 'Use the Authorization header.', content: '# API keys\n\nSend `Authorization: Bearer $KEY`.\n' }
-    console.log(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: '```json\n' + JSON.stringify(draft) + '\n```' }))
+    // Like the real CLI with --json-schema: the checked object comes back in structured_output.
+    const draft = { file: 'docs/api-keys.md', summary: 'Use the Authorization header.', content: '# API keys\n\n```bash\ncurl -H "Authorization: Bearer $KEY"\n```\n' }
+    const structured = args.includes('--json-schema')
+    console.log(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: structured ? 'Done.' : 'no schema was sent', ...(structured ? { structured_output: draft } : {}) }))
     return
   }
   if (input.includes('FAIL')) {

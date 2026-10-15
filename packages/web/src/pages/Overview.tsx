@@ -1,5 +1,5 @@
 import { AgentName, Change, Empty, ErrorBox, Funnel, LabelChip, Link, Loading, Stat } from '../components.tsx'
-import { fmt, navigate, useApi, useDays, useLive } from '../lib.ts'
+import { fmt, navigate, useApi, useDays, useLive, lowerFirst } from '../lib.ts'
 import type { SessionSummary, Summary } from '../types.ts'
 
 export const Overview = () => {
@@ -55,7 +55,7 @@ export const Overview = () => {
           value={fmt.pct(o.conversion)}
           sub={
             <>
-              <Change value={o.conversionChange} points /> to {s.funnelSteps.find((f) => f.id === 'first_payment')?.label.toLowerCase() ?? 'conversion'}
+              <Change value={o.conversionChange} points /> to {lowerFirst(s.funnelSteps.find((f) => f.id === 'first_payment')?.label ?? 'conversion')}
             </>
           }
         />
@@ -116,7 +116,7 @@ export const Overview = () => {
                   <div style={{ minWidth: 0 }}>
                     <div className="bold">{f.title}</div>
                     <div className="muted small">
-                      {fmt.n(f.sessionsLost)} sessions lost{f.beforeStep ? ` · before ${s.funnelSteps.find((x) => x.id === f.beforeStep)?.label.toLowerCase() ?? f.beforeStep}` : ''}
+                      {fmt.n(f.sessionsLost)} sessions lost{f.beforeStep ? ` · before ${lowerFirst(s.funnelSteps.find((x) => x.id === f.beforeStep)?.label ?? f.beforeStep)}` : ''}
                     </div>
                   </div>
                   <button className="btn" onClick={() => navigate(`/fixes/${encodeURIComponent(f.key)}`)}>

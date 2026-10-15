@@ -202,7 +202,7 @@ export const fmt = {
     if (compact && Math.abs(value) >= 1000) {
       return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.toUpperCase(), notation: 'compact', maximumFractionDigits: 1 }).format(value)
     }
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: value >= 1000 ? 0 : 2 }).format(value)
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: value >= 100 ? 0 : 2 }).format(value)
   },
   clock: (ms: number) => {
     const s = Math.max(0, Math.round(ms / 1000))
@@ -222,5 +222,8 @@ export const fmt = {
   date: (ts: number) => new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
   day: (ts: number) => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
 }
+
+/** "First API call" becomes "first API call" in a sentence, not "first api call". */
+export const lowerFirst = (s: string) => (s ? s[0]!.toLowerCase() + s.slice(1) : s)
 
 export const AGENT_COLORS = ['var(--a1)', 'var(--a2)', 'var(--a3)', 'var(--a4)', 'var(--a5)', 'var(--a6)']

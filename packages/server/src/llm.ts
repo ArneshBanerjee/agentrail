@@ -16,6 +16,11 @@ export type ChatRequest = {
   readonly system: string
   readonly messages: readonly ChatMessage[]
   readonly maxTokens?: number
+  /**
+   * A JSON schema the reply must follow. Each provider enforces it natively, so the reply is the
+   * JSON text and nothing has to be picked out of prose.
+   */
+  readonly schema?: { readonly name: string; readonly schema: Record<string, unknown> }
 }
 
 export type Chat = (request: ChatRequest) => Promise<string>
@@ -83,7 +88,7 @@ export const defaultProvider = (settings: WorkspaceSettings['llm'], env: LlmEnv 
 
 const anthropicChat = (apiKey: string, model: string): Chat => {
   const client = new Anthropic({ apiKey })
-  return async ({ system, messages, maxTokens }) => {
+  return async ({ system, messages, maxTokens, schema }) => {
     try {
       // Server-side fallback: if this model declines for policy reasons, the API retries on its
       // default fallback model inside the same call, instead of returning nothing.
@@ -92,7 +97,7 @@ const anthropicChat = (apiKey: string, model: string): Chat => {
         max_tokens: maxTokens ?? 16000,
         system,
         messages: messages.map((m) => ({ role: m.role, content: m.content })),
-        output_config: { effort: 'medium' },
+        output_config: { effort: 'medium', ...(schema ? { format: { type: 'json_schema', schema: schema.schema } } : {}) },
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
       })
@@ -110,11 +115,12 @@ const anthropicChat = (apiKey: string, model: string): Chat => {
 const openaiChat = (apiKey: string | undefined, model: string, baseURL: string | undefined): Chat => {
   // A local OpenAI-compatible server (Ollama, LM Studio) takes any key.
   const client = new OpenAI({ apiKey: apiKey ?? 'not-needed', ...(baseURL ? { baseURL } : {}) })
-  return async ({ system, messages, maxTokens }) => {
+  return async ({ system, messages, maxTokens, schema }) => {
     try {
       const response = await client.chat.completions.create({
         model,
         max_completion_tokens: maxTokens ?? 16000,
+        ...(schema ? { response_format: { type: 'json_schema', json_schema: { name: schema.name, schema: schema.schema, strict: true } } } : {}),
         messages: [{ role: 'system', content: system }, ...messages.map((m) => ({ role: m.role, content: m.content }))],
       })
       return response.choices[0]?.message.content ?? ''
@@ -128,11 +134,15 @@ const openaiChat = (apiKey: string | undefined, model: string, baseURL: string |
 
 const geminiChat = (apiKey: string, model: string): Chat => {
   const ai = new GoogleGenAI({ apiKey })
-  return async ({ system, messages, maxTokens }) => {
+  return async ({ system, messages, maxTokens, schema }) => {
     const response = await ai.models.generateContent({
       model,
       contents: messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
-      config: { systemInstruction: system, maxOutputTokens: maxTokens ?? 16000 },
+      config: {
+        systemInstruction: system,
+        maxOutputTokens: maxTokens ?? 16000,
+        ...(schema ? { responseMimeType: 'application/json', responseJsonSchema: schema.schema } : {}),
+      },
     })
     return response.text ?? ''
   }
@@ -147,10 +157,12 @@ export type ClaudeCodeOptions = {
   readonly allowedTools?: readonly string[]
   readonly cwd?: string
   readonly timeoutMs?: number
+  /** Structured output: Claude Code validates its reply against this and returns it apart. */
+  readonly jsonSchema?: Record<string, unknown>
 }
 
 /** The JSON `claude -p --output-format json` prints when it finishes. */
-type ClaudeResult = { readonly type?: string; readonly subtype?: string; readonly is_error?: boolean; readonly result?: string }
+type ClaudeResult = { readonly type?: string; readonly subtype?: string; readonly is_error?: boolean; readonly result?: string; readonly structured_output?: unknown }
 
 /**
  * Run Claude Code headless and return its final answer.
@@ -175,6 +187,7 @@ export const runClaudeCode = (prompt: string, system: string, o: ClaudeCodeOptio
       system,
       ...(o.allowedTools && o.allowedTools.length > 0 ? ['--allowedTools', ...o.allowedTools] : []),
       ...(o.model ? ['--model', o.model] : []),
+      ...(o.jsonSchema ? ['--json-schema', JSON.stringify(o.jsonSchema)] : []),
     ]
     const child = spawn(o.binary, args, { cwd: o.cwd ?? process.cwd(), stdio: ['pipe', 'pipe', 'pipe'], env: process.env })
     let out = ''
@@ -199,7 +212,7 @@ export const runClaudeCode = (prompt: string, system: string, o: ClaudeCodeOptio
       }
       if (!parsed) return reject(new LlmError(`Claude Code exited with ${code}: ${(err || out).slice(0, 400)}`))
       if (parsed.is_error) return reject(new LlmError(`Claude Code reported an error: ${(parsed.result ?? parsed.subtype ?? '').slice(0, 400)}`))
-      resolve({ text: parsed.result ?? '', raw: parsed })
+      resolve({ text: o.jsonSchema && parsed.structured_output !== undefined ? JSON.stringify(parsed.structured_output) : (parsed.result ?? ''), raw: parsed })
     })
     child.stdin.end(prompt)
   })
@@ -230,7 +243,8 @@ export const chatFor = (provider: ProviderStatus['id'], settings: WorkspaceSetti
     case 'claude-code': {
       const binary = findClaude(env)
       if (!binary) throw new LlmError('Claude Code is not installed on this server.')
-      return async ({ system, messages }) => (await runClaudeCode(flatten(messages), system, { binary, model })).text
+      return async ({ system, messages, schema }) =>
+        (await runClaudeCode(flatten(messages), system, { binary, model, ...(schema ? { jsonSchema: schema.schema } : {}) })).text
     }
   }
 }

@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
 import { AgentName, Diff, Empty, ErrorBox, Link, Loading } from '../components.tsx'
-import { api, fmt, navigate, useApi, useDays } from '../lib.ts'
+import { api, fmt, navigate, useApi, useDays, lowerFirst } from '../lib.ts'
 import type { FixCandidate, FixDetail as Detail, FixRecord, Providers, Summary } from '../types.ts'
 
 const STATUS: Record<FixRecord['status'], string> = { open: 'neutral', drafted: 'accent', testing: 'accent', published: 'good', dismissed: 'neutral' }
+
+/** Where to look: the missing or wrong page itself, the tool, or for API failures the page agents copied from. */
+const whereOf = (f: FixCandidate) =>
+  f.kind === 'not_found' || f.kind === 'markdown_served_html' ? f.path : f.kind === 'mcp_tool_error' ? f.tool : f.kind === 'failed_call' ? (f.sourcePage ?? f.path) : '—'
 
 const StatusChip = ({ record }: { record?: FixRecord }) => <span className={`chip ${STATUS[record?.status ?? 'open']}`}>{record?.drafting ? 'drafting' : (record?.status ?? 'open')}</span>
 
@@ -13,7 +17,10 @@ export const Fixes = () => {
   const { data, error } = useApi<{ fixes: (FixCandidate & { record?: FixRecord })[]; funnelSteps: Summary['funnelSteps']; currency: string }>(`/api/fixes?days=${days}`)
   if (error) return <ErrorBox error={error} />
   if (!data) return <Loading />
-  const label = (id?: string) => data.funnelSteps.find((s) => s.id === id)?.label.toLowerCase() ?? id
+  const label = (id?: string) => {
+    const l = data.funnelSteps.find((s) => s.id === id)?.label
+    return l ? lowerFirst(l) : id
+  }
   const shown = data.fixes.filter((f) => {
     const st = f.record?.status ?? 'open'
     return tab === 'open' ? st !== 'published' && st !== 'dismissed' : st === tab
@@ -49,7 +56,7 @@ export const Fixes = () => {
                     <div className="bold">{f.title}</div>
                     <div className="muted small">{f.proposal.summary}</div>
                   </td>
-                  <td className="mono small">{f.sourcePage ?? f.path ?? f.tool ?? '—'}</td>
+                  <td className="mono small">{whereOf(f)}</td>
                   <td className="num">
                     {fmt.n(f.sessionsLost)}
                     <div className="faint small">{f.beforeStep ? `before ${label(f.beforeStep)}` : ''}</div>
@@ -149,7 +156,7 @@ export const FixDetail = ({ fixKey }: { fixKey: string }) => {
           </div>
           <div className="value">{fmt.n(f.sessionsLost)}</div>
           <div className="sub">
-            sessions stopped here{f.beforeStep ? `, before ${stepLabel(f.beforeStep)?.toLowerCase()}` : ''}. {fmt.n(f.sessionsAffected)} hit it in all.
+            sessions stopped here{f.beforeStep ? `, before ${lowerFirst(stepLabel(f.beforeStep) ?? '')}` : ''}. {fmt.n(f.sessionsAffected)} hit it in all.
           </div>
         </div>
         <div className="card stat">
@@ -193,7 +200,7 @@ export const FixDetail = ({ fixKey }: { fixKey: string }) => {
             ) : null}
           </dl>
         ) : null}
-        {record?.drafting ? <div className="banner">Drafting the change with {chosenProvider}. This can take a minute with Claude Code.</div> : null}
+        {record?.drafting ? <div className="banner">Drafting the change with {providers.data?.available.find((p) => p.id === chosenProvider)?.label ?? chosenProvider}. Claude Code can take a minute.</div> : null}
         {record?.draftError ? <div className="banner warn">The draft failed: {record.draftError}</div> : null}
         {change ? (
           <div className="stack">
@@ -242,7 +249,7 @@ export const FixDetail = ({ fixKey }: { fixKey: string }) => {
         <div className="card">
           <h2>Test on real agents before release</h2>
           <p className="muted small" style={{ marginTop: 0 }}>
-            Runs the task agents were given, {runs} times, against your preview URL. A run passes if it gets past {stepLabel(f.beforeStep)?.toLowerCase() ?? 'this step'}.
+            Runs the task agents were given, {runs} times, against your preview URL. A run passes if it gets past {f.beforeStep ? lowerFirst(stepLabel(f.beforeStep) ?? '') : 'this step'}.
           </p>
           <div className="row-flex">
             <select value={chosenRunner ?? ''} onChange={(e) => setRunner(e.target.value)}>
@@ -282,7 +289,7 @@ export const FixDetail = ({ fixKey }: { fixKey: string }) => {
                     <span className="chip neutral">{r.phase}</span> {r.agent}
                   </span>
                   <span className={r.status === 'failed' ? 'down' : r.converted ? 'up' : 'muted'}>
-                    {r.status === 'done' ? (r.converted ? 'got past' : `stopped${r.reachedStep ? ` after ${stepLabel(r.reachedStep)?.toLowerCase()}` : ''}`) : r.status}
+                    {r.status === 'done' ? (r.converted ? 'got past' : `stopped${r.reachedStep ? ` after ${lowerFirst(stepLabel(r.reachedStep) ?? '')}` : ''}`) : r.status}
                   </span>
                 </div>
               ))}

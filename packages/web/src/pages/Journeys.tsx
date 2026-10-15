@@ -1,5 +1,5 @@
 import { AgentName, BlockerLine, Empty, ErrorBox, LabelChip, Link, Loading } from '../components.tsx'
-import { fmt, navigate, setQuery, useApi, useDays, useQuery } from '../lib.ts'
+import { fmt, navigate, setQuery, useApi, useDays, useQuery, lowerFirst } from '../lib.ts'
 import type { AgentRow, IntentGroup, SessionDetail, SessionSummary, Summary } from '../types.ts'
 
 export const Journeys = () => {
@@ -40,7 +40,7 @@ export const Journeys = () => {
           <option value="">Any outcome</option>
           {steps.slice(1).map((s) => (
             <option key={s.id} value={s.id}>
-              Stopped before {s.label.toLowerCase()}
+              Stopped before {lowerFirst(s.label)}
             </option>
           ))}
         </select>
@@ -79,7 +79,7 @@ export const Journeys = () => {
                   </td>
                   <td className="small">{label([...steps].reverse().find((x) => s.reached.includes(x.id))?.id)}</td>
                   <td className="small" style={{ maxWidth: 280 }}>
-                    {s.stoppedBy ? <span className="down">{s.stoppedBy.detail}</span> : s.stoppedAt ? <span className="faint">left before {label(s.stoppedAt)?.toLowerCase()}</span> : <span className="chip good">completed</span>}
+                    {s.stoppedBy ? <span className="down">{s.stoppedBy.detail}</span> : s.stoppedAt ? <span className="faint">left before {lowerFirst(label(s.stoppedAt) ?? '')}</span> : <span className="chip good">completed</span>}
                   </td>
                   <td className="num">{s.revenue > 0 ? fmt.money(s.revenue, s.currency) : <span className="faint">—</span>}</td>
                   <td className="num small">{s.live ? <span className="chip good">live</span> : fmt.date(s.startedAt)}</td>

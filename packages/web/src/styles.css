@@ -124,13 +124,13 @@ code, pre, .mono { font-family: var(--mono); font-size: 12.5px; }
 .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .g21 { grid-template-columns: 2fr 1fr; }
-@media (max-width: 1100px) { .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g3, .g21 { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) { .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g3, .g21, .g2 { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .shell { grid-template-columns: 1fr; } .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; } .g2, .g4 { grid-template-columns: 1fr; } .page, .top { padding-left: 16px; padding-right: 16px; } }
 
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 18px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 18px; min-width: 0; overflow-x: auto; }
 .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 12px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .card h2 a { text-transform: none; letter-spacing: 0; color: var(--accent); font-size: 12px; }
-.card + .card, .section + .section { margin-top: 16px; }
+.section + .section { margin-top: 16px; }
 .section { margin-top: 16px; }
 
 .stat .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; display: flex; justify-content: space-between; }

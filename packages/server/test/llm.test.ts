@@ -89,3 +89,24 @@ test('provider status and the default choice', () => {
   expect(defaultProvider({}, NO_CLAUDE)).toBeUndefined()
   expect(() => chatFor('anthropic', {}, NO_CLAUDE)).toThrow('No Anthropic API key')
 })
+
+const SCHEMA = { name: 'draft', schema: { type: 'object', properties: { content: { type: 'string' } }, required: ['content'], additionalProperties: false } }
+
+test('a schema goes to each provider in its own structured output form', async () => {
+  const anthropic = stubFetch({ id: 'm', type: 'message', role: 'assistant', model: 'claude-opus-5-5', stop_reason: 'end_turn', stop_details: null, content: [{ type: 'text', text: '{}' }], usage: { input_tokens: 1, output_tokens: 1 } })
+  await chatFor('anthropic', {}, { ...NO_CLAUDE, ANTHROPIC_API_KEY: 'k' })({ ...request, schema: SCHEMA })
+  expect(anthropic[0]!.body.output_config).toEqual({ effort: 'medium', format: { type: 'json_schema', schema: SCHEMA.schema } })
+  vi.unstubAllGlobals()
+
+  const openai = stubFetch({ id: 'c', object: 'chat.completion', created: 1, model: 'gpt-5', choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: '{}' } }] })
+  await chatFor('openai', {}, { ...NO_CLAUDE, OPENAI_API_KEY: 'k' })({ ...request, schema: SCHEMA })
+  expect(openai[0]!.body.response_format).toEqual({ type: 'json_schema', json_schema: { name: 'draft', schema: SCHEMA.schema, strict: true } })
+  vi.unstubAllGlobals()
+
+  const gemini = stubFetch({ candidates: [{ content: { role: 'model', parts: [{ text: '{}' }] }, finishReason: 'STOP' }] })
+  await chatFor('gemini', {}, { ...NO_CLAUDE, GEMINI_API_KEY: 'k' })({ ...request, schema: SCHEMA })
+  expect(gemini[0]!.body.generationConfig).toMatchObject({ responseMimeType: 'application/json', responseJsonSchema: SCHEMA.schema })
+
+  const echoed = JSON.parse(await chatFor('claude-code', {}, { AGENTRAIL_CLAUDE_BIN: FAKE_CLAUDE })({ ...request, schema: SCHEMA })) as { args: string[] }
+  expect(JSON.parse(echoed.args[echoed.args.indexOf('--json-schema') + 1]!)).toEqual(SCHEMA.schema)
+})

@@ -97,6 +97,7 @@ test('drafting with Claude Code, then publishing as a GitHub pull request', asyn
   expect(drafted).toMatchObject({ status: 'drafted', draft: { file: 'docs/api-keys.md', provider: 'claude-code', summary: 'Use the Authorization header.' } })
   expect(drafted.draft.before).toContain('X-Api-Key')
   expect(drafted.draft.after).toContain('Authorization: Bearer')
+  expect(drafted.draft.after).toContain('```bash')
 
   const published = await app.request(`${path}/publish`, { method: 'POST' })
   expect(await published.json()).toMatchObject({ status: 'published', prUrl: 'https://github.com/acme/docs/pull/7' })
@@ -153,8 +154,11 @@ test('the API agent loop stays on the target, sends the run header, and stops on
   expect(outcome.selfReport).toEqual({ success: true, summary: 'Created a meter.' })
 })
 
-test('parseDraft reads fenced and bare JSON', () => {
+test('parseDraft reads bare and fenced JSON, even when the page has its own fences', () => {
   expect(parseDraft('```json\n{"content": "a"}\n```')).toEqual({ content: 'a' })
+  const page = JSON.stringify({ file: 'x.md', content: '# X\n\n```bash\necho hi\n```\n' })
+  expect(parseDraft(page)?.content).toContain('echo hi')
+  expect(parseDraft('```json\n' + page + '\n```')?.content).toContain('echo hi')
   expect(parseDraft('Here: {"file": "x.md", "content": "b"} done')).toEqual({ file: 'x.md', content: 'b' })
   expect(parseDraft('no json')).toBeUndefined()
 })

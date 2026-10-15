@@ -21,10 +21,24 @@ const github = (s: WorkspaceSettings): GitHubConfig | undefined =>
 
 const blank = (workspaceId: string, key: string, now: number): FixRecord => ({ workspaceId, key, status: 'open', updatedAt: now })
 
-/** The model's reply, which should be one JSON object, possibly inside a code fence. */
+export const DRAFT_SCHEMA = {
+  name: 'draft',
+  schema: {
+    type: 'object',
+    properties: { file: { type: 'string' }, summary: { type: 'string' }, content: { type: 'string' } },
+    required: ['file', 'summary', 'content'],
+    additionalProperties: false,
+  },
+}
+
+/**
+ * The model's reply. Providers return it as schema-checked JSON, so the whole text is tried first.
+ * The rest is for a model that wraps it anyway. A drafted page holds its own code fences, so a
+ * fence is only a last resort.
+ */
 export const parseDraft = (text: string): { file?: string; summary?: string; content?: string } | undefined => {
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text)?.[1]
-  for (const candidate of [fenced, text]) {
+  const fenced = /^\s*```(?:json)?\s*([\s\S]*)```\s*$/.exec(text)?.[1]
+  for (const candidate of [text, fenced]) {
     if (!candidate) continue
     const start = candidate.indexOf('{')
     const end = candidate.lastIndexOf('}')
@@ -170,7 +184,7 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
       try {
         const gh = github(found.settings)
         const source = gh && found.fix.sourcePage ? await findDocsFile(gh, found.settings.github.docsRoot ?? '', found.fix.sourcePage, deps.fetcher) : undefined
-        const reply = await chat({ system: DRAFT_SYSTEM, messages: [{ role: 'user', content: draftPrompt(found.fix, sessions, source) }] })
+        const reply = await chat({ system: DRAFT_SYSTEM, messages: [{ role: 'user', content: draftPrompt(found.fix, sessions, source) }], schema: DRAFT_SCHEMA })
         const parsed = parseDraft(reply)
         if (!parsed?.content) throw new LlmError('The model did not return a change in the expected format.')
         const next = latest()
@@ -193,7 +207,7 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
         store.saveFix(next)
       }
     })()
-    return c.json({ message: `Drafting with ${provider}.` }, 202)
+    return c.json({ message: `Drafting with ${providerStatus(found.settings.llm, env).find((p) => p.id === provider)?.label ?? provider}.` }, 202)
   })
 
   app.post('/api/fixes/:key/publish', async (c) => {
