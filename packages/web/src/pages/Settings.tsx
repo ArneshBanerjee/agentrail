@@ -205,8 +205,7 @@ export const Settings = () => {
           Revenue from Stripe <Saved at={saved.stripe} />
         </h2>
         <p className="muted small" style={{ marginTop: 0 }}>
-          Point a Stripe webhook at <span className="mono">{me.data.ingestUrl.replace('/v1/events', '/v1/stripe/')}{me.data.sites[0]?.ingestKey}</span> for <span className="mono">charge.succeeded</span>, <span className="mono">charge.failed</span> and{' '}
-          <span className="mono">invoice.paid</span>. Set <span className="mono">metadata.agentrail_account</span> on customers to the id you pass to <span className="mono">identify()</span>, or the Stripe customer id is used.
+          Point a Stripe webhook at <span className="mono">{me.data.ingestUrl.replace('/v1/events', '/v1/stripe/')}{me.data.sites[0]?.ingestKey}</span> for <span className="mono">charge.succeeded</span> and <span className="mono">charge.failed</span>. Set <span className="mono">metadata.agentrail_account</span> on customers to the id you pass to <span className="mono">identify()</span>, or the Stripe customer id is used.
         </p>
         <label className="field">
           Webhook signing secret

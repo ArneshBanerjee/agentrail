@@ -1,4 +1,4 @@
-import { attribute, type IncomingEvent } from '@agentrail/core'
+import { isAgentTraffic, type IncomingEvent } from '@agentrail/core'
 
 export type EventInput = Partial<IncomingEvent> & Pick<IncomingEvent, 'kind'>
 
@@ -162,9 +162,7 @@ export class Agentrail {
   }
 
   private wanted(event: IncomingEvent): boolean {
-    if (this.options.sendAll) return true
-    if (event.signature || event.signatureAgent) return true
-    return attribute({ userAgent: event.userAgent, accept: event.accept, path: event.path }) !== undefined
+    return this.options.sendAll === true || isAgentTraffic(event)
   }
 
   /** Build the request event. Exposed for collectors this package does not cover. */

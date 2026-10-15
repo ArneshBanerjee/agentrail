@@ -1,12 +1,14 @@
 import { groupIntents } from '@agentrail/core'
 import type { Hono } from 'hono'
 import type { AppContext } from './app.ts'
+import { registerDrains } from './drains.ts'
 import { registerFixes, type FixDeps } from './fixes.ts'
 import { chatFor, defaultProvider, type ProviderStatus } from './llm.ts'
 
 /** Routes for features beyond the core API. Each one registers itself here. */
 export const extend = (app: Hono, ctx: AppContext, deps: FixDeps = {}): void => {
   registerFixes(app, ctx, deps)
+  registerDrains(app, ctx)
   registerIntentLabels(app, ctx, deps)
 }
 
