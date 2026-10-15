@@ -59,6 +59,8 @@ const titleCase = (w: string) => w.charAt(0).toUpperCase() + w.slice(1)
 export type IntentOptions = {
   readonly definitions?: readonly IntentDefinition[]
   readonly conversionStep?: string
+  /** Better names for groups, by id, for example from a model. The grouping does not change. */
+  readonly labels?: Readonly<Record<string, string>>
 }
 
 /** Which group each session's intent falls into. Sessions with no stated task are left out. */
@@ -112,7 +114,7 @@ export const groupIntents = (sessions: readonly Session[], options: IntentOption
       const newest = [...g.sessions].sort((a, b) => b.startedAt - a.startedAt)
       return {
         id,
-        label: g.label,
+        label: options.labels?.[id] ?? g.label,
         sessions: g.sessions.length,
         converted,
         conversion: converted / g.sessions.length,

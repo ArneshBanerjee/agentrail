@@ -69,7 +69,7 @@ export const summarize = (store: Store, workspaceId: string, a: Analysis, now: n
     a.sessions.map((s) => ({ agentId: s.agent.name, reached: s.reached })),
     settings.funnel,
   )
-  const intents = groupIntents(a.sessions, { definitions: settings.intents, conversionStep: step })
+  const intents = groupIntents(a.sessions, { definitions: settings.intents, conversionStep: step, labels: settings.intentLabels })
   const fixes = rankFixes(a.sessions, { windowMs: a.window.to - a.window.from, knownPaths: a.knownPaths, conversionStep: step })
   const agents = breakdown(a.sessions, byAgent, step)
   return {

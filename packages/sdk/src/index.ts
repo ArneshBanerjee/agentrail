@@ -32,7 +32,14 @@ export type AgentrailOptions = {
   readonly ignore?: RegExp
   readonly fetch?: typeof fetch
   readonly onError?: (error: unknown) => void
+  /**
+   * Apply fixes published in Agentrail that the middleware can serve itself, such as a redirect
+   * from a path agents guess to the page they need. Refreshed every minute.
+   */
+  readonly applyFixes?: boolean
 }
+
+export type Redirect = { readonly from: string; readonly to: string; readonly status: number }
 
 const STATIC = /\.(?:js|mjs|css|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|map)$/i
 
@@ -63,10 +70,14 @@ export class Agentrail {
   private inflight = new Set<Promise<void>>()
   private readonly options: AgentrailOptions
   private readonly endpoint: string
+  private readonly base: string
+  private redirects = new Map<string, Redirect>()
+  private redirectsAt = 0
 
   constructor(options: AgentrailOptions) {
     this.options = options
-    this.endpoint = `${(options.endpoint ?? 'http://localhost:4318').replace(/\/$/, '')}/v1/events`
+    this.base = (options.endpoint ?? 'http://localhost:4318').replace(/\/$/, '')
+    this.endpoint = `${this.base}/v1/events`
     const interval = options.flushIntervalMs ?? 2000
     if (interval > 0) {
       this.timer = setInterval(() => void this.flush(), interval)
@@ -122,6 +133,27 @@ export class Agentrail {
     if (this.queue.length > 0) await this.flush()
   }
 
+  /** Published redirects, fetched at most once a minute. A failed fetch keeps the last list. */
+  async refreshFixes(force = false): Promise<void> {
+    if (!this.options.applyFixes) return
+    if (!force && Date.now() - this.redirectsAt < 60_000) return
+    this.redirectsAt = Date.now()
+    try {
+      const res = await (this.options.fetch ?? fetch)(`${this.base}/v1/fixes/redirects`, { headers: { 'x-agentrail-key': this.options.key } })
+      if (!res.ok) return
+      const list = (await res.json()) as { redirects: Redirect[] }
+      this.redirects = new Map(list.redirects.map((r) => [r.from, r]))
+    } catch (error) {
+      this.options.onError?.(error)
+    }
+  }
+
+  /** The redirect for a path, if a published fix has one. */
+  redirectFor(path: string): Redirect | undefined {
+    void this.refreshFixes()
+    return this.redirects.get(path) ?? this.redirects.get(path.replace(/\/$/, ''))
+  }
+
   /** Flush and stop the timer. Call before a short-lived process exits. */
   async close(): Promise<void> {
     if (this.timer) clearInterval(this.timer)
@@ -167,6 +199,7 @@ export class Agentrail {
     set('signatureAgent', header(h, 'signature-agent'))
     set('sessionHint', hint)
     set('accountId', account)
+    set('runId', header(h, 'x-agentrail-run'))
     return e as IncomingEvent
   }
 
@@ -235,7 +268,10 @@ export class Agentrail {
         hooks.waitUntil?.(...rest)?.(this.flush())
         return res
       }
-      const response = await handle(request, ...rest)
+      const redirect = this.redirectFor(path)
+      const response = redirect
+        ? new Response(null, { status: redirect.status, headers: { location: redirect.to } })
+        : await handle(request, ...rest)
       if (!(this.options.ignore ?? STATIC).test(path)) {
         const event = this.requestEvent(request, response, startedAt, remote)
         if (this.wanted(event)) {
@@ -258,10 +294,17 @@ export class Agentrail {
 
   /** Hono middleware: `app.use(agentrail.hono())`. */
   hono() {
-    return async (c: { req: { raw: Request }; res: Response; env?: unknown }, next: () => Promise<void>) => {
+    return async (c: { req: { raw: Request }; res: Response; env?: unknown }, next: () => Promise<void>): Promise<Response | void> => {
       const startedAt = Date.now()
-      await next()
       const path = new URL(c.req.raw.url).pathname
+      const redirect = this.redirectFor(path)
+      if (redirect) {
+        const response = new Response(null, { status: redirect.status, headers: { location: redirect.to } })
+        const event = this.requestEvent(c.req.raw, response, startedAt)
+        if (this.wanted(event)) this.queue.push(event)
+        return response
+      }
+      await next()
       if ((this.options.ignore ?? STATIC).test(path)) return
       const remote = (c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined)?.incoming?.socket?.remoteAddress
       const event = this.requestEvent(c.req.raw, c.res, startedAt, remote)
@@ -300,6 +343,18 @@ export class Agentrail {
             out.end(await r.text())
           })
         })
+        return
+      }
+      const redirect = this.redirectFor(path)
+      if (redirect) {
+        const out = res as unknown as { statusCode: number; setHeader(n: string, v: string): void; end(): void }
+        out.statusCode = redirect.status
+        out.setHeader('location', redirect.to)
+        res.on('finish', () => {
+          const event = this.requestEvent(request, new Response(null, { status: redirect.status }), startedAt, req.socket?.remoteAddress)
+          if (this.wanted(event)) this.queue.push(event)
+        })
+        out.end()
         return
       }
       res.on('finish', () => {

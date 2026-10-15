@@ -1,0 +1,347 @@
+import { randomUUID } from 'node:crypto'
+import { groupIntents, rankFixes, type FixCandidate, type Session } from '@agentrail/core'
+import type { Hono } from 'hono'
+import type { AppContext } from './app.ts'
+import { findDocsFile, openPullRequest, type GitHubConfig } from './github.ts'
+import { chatFor, defaultProvider, LlmError, providerStatus, type ProviderStatus } from './llm.ts'
+import { runAgent, runnerAgents } from './runner.ts'
+import type { FixRecord, RunRecord, Store, WorkspaceSettings } from './store.ts'
+import { sessionSummary } from './views.ts'
+
+const DAY = 86_400_000
+
+export type FixDeps = {
+  /** Injected in tests. */
+  readonly fetcher?: typeof fetch
+  readonly env?: NodeJS.ProcessEnv
+}
+
+const github = (s: WorkspaceSettings): GitHubConfig | undefined =>
+  s.github.repo && s.github.token ? { repo: s.github.repo, token: s.github.token, ...(s.github.branch ? { branch: s.github.branch } : {}) } : undefined
+
+const blank = (workspaceId: string, key: string, now: number): FixRecord => ({ workspaceId, key, status: 'open', updatedAt: now })
+
+/** The model's reply, which should be one JSON object, possibly inside a code fence. */
+export const parseDraft = (text: string): { file?: string; summary?: string; content?: string } | undefined => {
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text)?.[1]
+  for (const candidate of [fenced, text]) {
+    if (!candidate) continue
+    const start = candidate.indexOf('{')
+    const end = candidate.lastIndexOf('}')
+    if (start < 0 || end < start) continue
+    try {
+      return JSON.parse(candidate.slice(start, end + 1)) as { file?: string; summary?: string; content?: string }
+    } catch {
+      // Try the next candidate.
+    }
+  }
+  return undefined
+}
+
+const DRAFT_SYSTEM = `You fix documentation and product surfaces so AI agents can complete tasks.
+You get one problem that stopped agents, with evidence from their sessions, and the current source of the page they read.
+Change only what fixes the problem. Keep the author's style, structure and wording everywhere else.
+Never invent API behaviour that the evidence does not support. If the evidence is not enough, make the smallest safe change and say so in the summary.
+Reply with one JSON object only: {"file": "<path>", "summary": "<one sentence for a reviewer>", "content": "<the complete new file>"}`
+
+export const draftPrompt = (fix: FixCandidate, sessions: readonly Session[], source: { path: string; content: string } | undefined) => {
+  const evidence = sessions.slice(0, 5).map((s) => {
+    const lines = s.events.slice(-12).map((e) => `  ${e.kind} ${e.method ?? ''} ${e.path ?? e.step ?? e.tool ?? ''} ${e.status ?? ''} ${e.error ?? ''}`.replace(/\s+/g, ' ').trim())
+    return `- ${s.agent.name}${s.intent ? `, task: "${s.intent}"` : ''}\n${lines.map((l) => `  ${l}`).join('\n')}`
+  })
+  return `Problem: ${fix.title}
+Detail: ${fix.detail}
+Kind: ${fix.kind}
+Suggested direction: ${fix.proposal.summary}
+Sessions stopped: ${fix.sessionsLost}${fix.beforeStep ? ` (before ${fix.beforeStep})` : ''}
+Seen on: ${fix.paths.join(', ') || 'n/a'}
+Page agents read before the problem: ${fix.sourcePage ?? 'unknown'}
+
+Evidence from sessions (redacted):
+${evidence.join('\n')}
+
+${source ? `Current source of ${source.path}:\n<file>\n${source.content}\n</file>` : `There is no source file. Write a short new markdown page or snippet that fixes the problem, and name a sensible path for it.`}`
+}
+
+export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) => {
+  const { store, analyzer } = ctx
+  const env = deps.env ?? process.env
+
+  /** Candidates for a window, with what the store knows about each. */
+  const candidates = (workspaceId: string, days: number) => {
+    const to = ctx.now()
+    const settings = store.settings(workspaceId)
+    const a = analyzer.analyze(workspaceId, { from: to - days * DAY, to })
+    const fixes = rankFixes(a.sessions, { windowMs: days * DAY, knownPaths: a.knownPaths, conversionStep: settings.conversionStep })
+    return { a, fixes, settings }
+  }
+
+  const findFix = (workspaceId: string, key: string, days: number) => {
+    // A shipped fix stops appearing in recent sessions, which is the point. Look further back.
+    for (const d of [days, 90, 365]) {
+      const c = candidates(workspaceId, d)
+      const fix = c.fixes.find((f) => f.key === key)
+      if (fix) return { ...c, fix }
+    }
+    return undefined
+  }
+
+  app.get('/api/providers', (c) => {
+    const settings = store.settings(ctx.workspaceOf(c))
+    return c.json({ available: providerStatus(settings.llm, env), selected: defaultProvider(settings.llm, env), agents: runnerAgents(settings.llm, env) })
+  })
+
+  app.get('/api/fixes', (c) => {
+    const workspaceId = ctx.workspaceOf(c)
+    const days = Math.max(1, Number(c.req.query('days') ?? 30) || 30)
+    const { fixes, settings } = candidates(workspaceId, days)
+    const records = new Map(store.fixes(workspaceId).map((r) => [r.key, r]))
+    // Published and dismissed fixes stay listed even after their blocker is gone from the window.
+    const listed = fixes.map((f) => ({ ...f, record: records.get(f.key) }))
+    for (const r of records.values()) {
+      if (fixes.some((f) => f.key === r.key) || (r.status !== 'published' && r.status !== 'dismissed')) continue
+      const old = findFix(workspaceId, r.key, 365)?.fix
+      if (old) listed.push({ ...old, record: r })
+    }
+    return c.json({ fixes: listed, funnelSteps: settings.funnel.map((s) => ({ id: s.id, label: s.label })), currency: settings.currency })
+  })
+
+  app.get('/api/fixes/:key', (c) => {
+    const workspaceId = ctx.workspaceOf(c)
+    const key = c.req.param('key')
+    const days = Math.max(1, Number(c.req.query('days') ?? 30) || 30)
+    const found = findFix(workspaceId, key, days)
+    if (!found) return c.json({ error: 'No sessions show this problem.' }, 404)
+    const record = store.fix(workspaceId, key)
+    const runs = store.runs(workspaceId, key)
+    const summary = (phase: 'before' | 'after') => {
+      const done = runs.filter((r) => r.phase === phase && r.status === 'done')
+      return { runs: done.length, converted: done.filter((r) => r.converted).length }
+    }
+    const t = ctx.now()
+    const ids = new Set(found.fix.sessionIds)
+    return c.json({
+      ...found.fix,
+      record,
+      runs,
+      runSummary: { before: summary('before'), after: summary('after') },
+      impact: record?.publishedAt ? impact(store, ctx, workspaceId, key, record.publishedAt) : undefined,
+      sessions: found.a.sessions.filter((s) => ids.has(s.id)).slice(0, 20).map((s) => sessionSummary(s, t)),
+    })
+  })
+
+  app.post('/api/fixes/:key/status', async (c) => {
+    const workspaceId = ctx.workspaceOf(c)
+    const key = c.req.param('key')
+    const { status } = (await c.req.json()) as { status?: FixRecord['status'] }
+    if (status !== 'open' && status !== 'dismissed') return c.json({ error: 'status must be open or dismissed' }, 400)
+    const record = store.fix(workspaceId, key) ?? blank(workspaceId, key, ctx.now())
+    record.status = status
+    record.updatedAt = ctx.now()
+    store.saveFix(record)
+    return c.json(record)
+  })
+
+  app.post('/api/fixes/:key/draft', async (c) => {
+    const workspaceId = ctx.workspaceOf(c)
+    const key = c.req.param('key')
+    const body = (await c.req.json().catch(() => ({}))) as { provider?: ProviderStatus['id'] }
+    const found = findFix(workspaceId, key, 30)
+    if (!found) return c.json({ error: 'No sessions show this problem.' }, 404)
+    const provider = body.provider ?? defaultProvider(found.settings.llm, env)
+    if (!provider) return c.json({ error: 'No model is set up. Sign in to Claude Code on the server, or add an API key in Settings.' }, 400)
+    let chat
+    try {
+      chat = chatFor(provider, found.settings.llm, env)
+    } catch (error) {
+      return c.json({ error: (error as Error).message }, 400)
+    }
+    const record = store.fix(workspaceId, key) ?? blank(workspaceId, key, ctx.now())
+    record.drafting = true
+    delete record.draftError
+    record.updatedAt = ctx.now()
+    store.saveFix(record)
+
+    // Drafting can take a minute with Claude Code, so it runs after the response. The page polls.
+    const ids = new Set(found.fix.sessionIds)
+    const sessions = found.a.sessions.filter((s) => ids.has(s.id))
+    void (async () => {
+      const latest = () => store.fix(workspaceId, key) ?? record
+      try {
+        const gh = github(found.settings)
+        const source = gh && found.fix.sourcePage ? await findDocsFile(gh, found.settings.github.docsRoot ?? '', found.fix.sourcePage, deps.fetcher) : undefined
+        const reply = await chat({ system: DRAFT_SYSTEM, messages: [{ role: 'user', content: draftPrompt(found.fix, sessions, source) }] })
+        const parsed = parseDraft(reply)
+        if (!parsed?.content) throw new LlmError('The model did not return a change in the expected format.')
+        const next = latest()
+        next.draft = {
+          file: source?.path ?? parsed.file ?? `${(found.fix.sourcePage ?? 'docs/agent-fix').replace(/^\//, '')}.md`,
+          ...(source ? { before: source.content } : {}),
+          after: parsed.content,
+          summary: parsed.summary ?? found.fix.proposal.summary,
+          provider,
+        }
+        next.status = next.status === 'published' ? 'published' : 'drafted'
+        next.drafting = false
+        next.updatedAt = ctx.now()
+        store.saveFix(next)
+      } catch (error) {
+        const next = latest()
+        next.drafting = false
+        next.draftError = (error as Error).message
+        next.updatedAt = ctx.now()
+        store.saveFix(next)
+      }
+    })()
+    return c.json({ message: `Drafting with ${provider}.` }, 202)
+  })
+
+  app.post('/api/fixes/:key/publish', async (c) => {
+    const workspaceId = ctx.workspaceOf(c)
+    const key = c.req.param('key')
+    const found = findFix(workspaceId, key, 30)
+    if (!found) return c.json({ error: 'No sessions show this problem.' }, 404)
+    const record = store.fix(workspaceId, key) ?? blank(workspaceId, key, ctx.now())
+    const rulePatch = found.fix.proposal.patch
+    const gh = github(found.settings)
+    let message: string
+    if (record.draft && gh) {
+      try {
+        record.prUrl = await openPullRequest(
+          gh,
+          {
+            path: record.draft.file,
+            content: record.draft.after,
+            title: `Fix for agents: ${found.fix.title}`.slice(0, 120),
+            branchName: `agentrail/fix-${randomUUID().slice(0, 8)}`,
+            body: `${record.draft.summary}\n\n${found.fix.sessionsLost} agent sessions stopped on this problem (${found.fix.detail}).\n\nPrepared by Agentrail from redacted agent sessions. Drafted with ${record.draft.provider}.`,
+          },
+          deps.fetcher,
+        )
+      } catch (error) {
+        return c.json({ error: `Could not open the pull request: ${(error as Error).message}` }, 502)
+      }
+      message = 'Pull request opened. The before and after comparison starts now.'
+    } else if (rulePatch && found.fix.kind === 'not_found') {
+      message = 'Published. Collectors with applyFixes on now serve this redirect.'
+    } else if (record.draft) {
+      message = 'Marked as published. Connect GitHub in Settings to open pull requests.'
+    } else {
+      return c.json({ error: 'Draft the change first.' }, 400)
+    }
+    record.status = 'published'
+    record.publishedAt = ctx.now()
+    record.updatedAt = ctx.now()
+    store.saveFix(record)
+    return c.json({ ...record, message })
+  })
+
+  app.post('/api/fixes/:key/test', async (c) => {
+    const workspaceId = ctx.workspaceOf(c)
+    const key = c.req.param('key')
+    const body = (await c.req.json().catch(() => ({}))) as { agent?: string; runs?: number; phase?: 'before' | 'after' }
+    const found = findFix(workspaceId, key, 30)
+    if (!found) return c.json({ error: 'No sessions show this problem.' }, 404)
+    const agents = runnerAgents(found.settings.llm, env)
+    const agent = agents.find((a) => a.id === body.agent && a.ready) ?? agents.find((a) => a.ready)
+    if (!agent) return c.json({ error: 'No agent is available. Sign in to Claude Code on the server, or add an API key in Settings.' }, 400)
+    const site = store.sites(workspaceId)[0]
+    const targetUrl = found.settings.runner.targetUrl ?? (site && site.host !== 'localhost' ? `https://${site.host}` : undefined)
+    if (!targetUrl) return c.json({ error: 'Set the preview URL for test runs in Settings.' }, 400)
+    const ids = new Set(found.fix.sessionIds)
+    const intents = groupIntents(found.a.sessions.filter((s) => ids.has(s.id)))
+    const task = intents[0]?.quotes[0] ?? `Get past this problem: ${found.fix.title}.`
+    const n = Math.min(Math.max(Math.round(body.runs ?? 5), 1), 50)
+    const phase = body.phase === 'after' ? 'after' : 'before'
+    const queued: RunRecord[] = Array.from({ length: n }, () => ({
+      id: `run_${randomUUID()}`,
+      workspaceId,
+      fixKey: key,
+      phase,
+      agent: agent.id,
+      task,
+      status: 'queued',
+      createdAt: ctx.now(),
+    }))
+    for (const r of queued) store.saveRun(r)
+    void runQueue(store, ctx, queued, targetUrl, found.fix.beforeStep, deps)
+    return c.json({ message: `${n} ${phase} runs queued on ${agent.label}.`, runs: queued }, 202)
+  })
+
+  /** For the SDK's `applyFixes`: published redirect fixes for the workspace of this ingest key. */
+  app.get('/v1/fixes/redirects', (c) => {
+    const key = c.req.header('x-agentrail-key')
+    const site = key ? store.siteByKey(key) : undefined
+    if (!site) return c.json({ error: 'unknown ingest key' }, 401)
+    const published = store.fixes(site.workspaceId).filter((r) => r.status === 'published' && r.key.startsWith('not_found:'))
+    const redirects = published.flatMap((r) => {
+      const found = findFix(site.workspaceId, r.key, 365)
+      const patch = found?.fix.proposal.patch
+      if (!patch) return []
+      try {
+        return JSON.parse(patch.content) as { from: string; to: string; status: number }[]
+      } catch {
+        return []
+      }
+    })
+    return c.json({ redirects })
+  })
+}
+
+/** Runs one at a time, so a laptop running Claude Code is not asked for ten at once. */
+const runQueue = async (store: Store, ctx: AppContext, runs: RunRecord[], targetUrl: string, step: string | undefined, deps: FixDeps) => {
+  for (const run of runs) {
+    run.status = 'running'
+    store.saveRun(run)
+    const settings = store.settings(run.workspaceId)
+    try {
+      const outcome = await runAgent({
+        runId: run.id,
+        agent: run.agent,
+        task: run.task,
+        targetUrl,
+        timeoutMs: (settings.runner.timeoutSec ?? 300) * 1000,
+        settings,
+        ...(deps.fetcher ? { fetcher: deps.fetcher } : {}),
+        ...(deps.env ? { env: deps.env } : {}),
+      })
+      // Give the collector a moment to flush the run's last requests.
+      await new Promise((r) => setTimeout(r, deps.fetcher ? 0 : 3000))
+      const to = ctx.now()
+      const sessions = ctx.analyzer.analyze(run.workspaceId, { from: run.createdAt - 60_000, to }, { runs: true }).sessions.filter((s) => s.runId === run.id)
+      const reached = new Set(sessions.flatMap((s) => Object.keys(s.reached)))
+      const funnel = settings.funnel.map((f) => f.id)
+      run.output = outcome.transcript.slice(-4000)
+      if (sessions.length > 0) {
+        run.measuredBy = 'collector'
+        const last = [...funnel].reverse().find((id) => reached.has(id))
+        if (last) run.reachedStep = last
+        run.converted = step ? reached.has(step) : (outcome.selfReport?.success ?? false)
+      } else {
+        run.measuredBy = 'self-report'
+        run.converted = outcome.selfReport?.success ?? false
+      }
+      run.status = 'done'
+    } catch (error) {
+      run.status = 'failed'
+      run.output = (error as Error).message
+    }
+    run.finishedAt = ctx.now()
+    store.saveRun(run)
+  }
+}
+
+/** Conversion and how often the problem still happens, for equal windows on each side of publishing. */
+const impact = (store: Store, ctx: AppContext, workspaceId: string, key: string, publishedAt: number) => {
+  const now = ctx.now()
+  const days = Math.min(14, Math.max(1, Math.floor((now - publishedAt) / DAY)))
+  const span = days * DAY
+  const step = store.settings(workspaceId).conversionStep
+  const side = (from: number, to: number) => {
+    const sessions = ctx.analyzer.analyze(workspaceId, { from, to }).sessions
+    const converted = sessions.filter((s) => step in s.reached).length
+    const hit = sessions.filter((s) => s.blockers.some((b) => b.key === key)).length
+    return { sessions: sessions.length, converted, conversion: sessions.length ? converted / sessions.length : 0, hitRate: sessions.length ? hit / sessions.length : 0 }
+  }
+  return { days, before: side(publishedAt - span, publishedAt), after: side(publishedAt, Math.min(now, publishedAt + span)) }
+}

@@ -15,6 +15,9 @@ export type WorkspaceSettings = {
   llm: { provider?: LlmProvider; model?: string; apiKey?: string; baseUrl?: string }
   github: { repo?: string; token?: string; branch?: string; docsRoot?: string }
   stripe: { webhookSecret?: string }
+  runner: { targetUrl?: string; timeoutSec?: number }
+  /** Names a model gave to keyword groups. Keyed by group id. */
+  intentLabels: Record<string, string>
 }
 
 export const DEFAULT_SETTINGS: WorkspaceSettings = {
@@ -25,6 +28,8 @@ export const DEFAULT_SETTINGS: WorkspaceSettings = {
   llm: {},
   github: {},
   stripe: {},
+  runner: {},
+  intentLabels: {},
 }
 
 export type FixStatus = 'open' | 'drafted' | 'testing' | 'published' | 'dismissed'
@@ -34,6 +39,8 @@ export type FixRecord = {
   readonly key: string
   status: FixStatus
   draft?: { file: string; before?: string; after: string; summary: string; provider: string }
+  drafting?: boolean
+  draftError?: string
   prUrl?: string
   publishedAt?: number
   updatedAt: number
@@ -49,6 +56,8 @@ export type RunRecord = {
   status: 'queued' | 'running' | 'done' | 'failed'
   reachedStep?: string
   converted?: boolean
+  /** `collector` when the run's own traffic was measured, `self-report` when only the agent said so. */
+  measuredBy?: 'collector' | 'self-report'
   output?: string
   readonly createdAt: number
   finishedAt?: number

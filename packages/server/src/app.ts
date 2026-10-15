@@ -148,7 +148,7 @@ export const createApp = (deps: AppDeps) => {
     const intentGroup = c.req.query('intent')
     const settings = store.settings(workspaceId)
     const inIntent = intentGroup
-      ? new Set(groupIntents(a.sessions, { definitions: settings.intents }).find((g) => g.id === intentGroup)?.sessionIds ?? [])
+      ? new Set(groupIntents(a.sessions, { definitions: settings.intents, labels: settings.intentLabels }).find((g) => g.id === intentGroup)?.sessionIds ?? [])
       : undefined
     const limit = Math.min(Number(c.req.query('limit') ?? 100) || 100, 1000)
     const t = now()
@@ -206,7 +206,7 @@ export const createApp = (deps: AppDeps) => {
     const workspaceId = workspaceOf(c)
     const a = analyzer.analyze(workspaceId, windowOf(c))
     const settings = store.settings(workspaceId)
-    const groups = groupIntents(a.sessions, { definitions: settings.intents, conversionStep: settings.conversionStep })
+    const groups = groupIntents(a.sessions, { definitions: settings.intents, conversionStep: settings.conversionStep, labels: settings.intentLabels })
     return c.json({ withIntent: a.sessions.filter((s) => s.intent).length, total: a.sessions.length, intents: groups })
   })
 
@@ -215,7 +215,7 @@ export const createApp = (deps: AppDeps) => {
     const a = analyzer.analyze(workspaceId, windowOf(c))
     const settings = store.settings(workspaceId)
     const step = settings.conversionStep
-    const groups = groupIntents(a.sessions, { definitions: settings.intents, conversionStep: step })
+    const groups = groupIntents(a.sessions, { definitions: settings.intents, conversionStep: step, labels: settings.intentLabels })
     const intentOf = new Map<string, { key: string; label: string }>()
     for (const g of groups) for (const id of g.sessionIds) intentOf.set(id, { key: g.id, label: g.label })
     return c.json({
@@ -252,6 +252,7 @@ export const createApp = (deps: AppDeps) => {
       llm: keep(body.llm, current.llm, 'apiKey'),
       github: keep(body.github, current.github, 'token'),
       stripe: keep(body.stripe, current.stripe, 'webhookSecret'),
+      runner: { ...current.runner, ...(body.runner ?? {}) },
     }
     store.saveSettings(workspaceId, updated)
     return c.json(maskSettings(updated))
