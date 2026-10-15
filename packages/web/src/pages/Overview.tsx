@@ -1,0 +1,188 @@
+import { AgentName, Change, Empty, ErrorBox, Funnel, LabelChip, Link, Loading, Stat } from '../components.tsx'
+import { fmt, navigate, useApi, useDays, useLive } from '../lib.ts'
+import type { SessionSummary, Summary } from '../types.ts'
+
+export const Overview = () => {
+  const [days] = useDays()
+  const summary = useApi<Summary>(`/api/summary?days=${days}&fixes=3&intents=3`)
+  const arrivals = useApi<{ arrivals: SessionSummary[] }>(`/api/arrivals?days=${days}&limit=6`)
+  useLive(undefined, () => {
+    summary.reload()
+    arrivals.reload()
+  })
+  if (summary.error) return <ErrorBox error={summary.error} />
+  if (!summary.data) return <Loading />
+  const s = summary.data
+  const o = s.overview
+  const totalIntents = o.withIntent
+  const main = s.intents[0]
+  const biggest = s.fixes[0]
+  const agentNames = s.agents.map((a) => a.label)
+  if (o.sessions === 0) {
+    return (
+      <div className="card">
+        <Empty title="No agent sessions yet">
+          <p>Add a collector to your docs, API or MCP server, and agents will show up here as they arrive.</p>
+          <p className="row-flex" style={{ justifyContent: 'center' }}>
+            <Link to="/setup" className="btn primary">
+              Set up a collector
+            </Link>
+          </p>
+          <p className="small faint">To look around first, run npm run seed for a demo workspace.</p>
+        </Empty>
+      </div>
+    )
+  }
+  return (
+    <>
+      <div className="grid g4">
+        <Stat
+          label="Agent sessions"
+          aside={
+            <span className="live">
+              <span className={`dot ${o.live > 0 ? 'on' : ''}`} /> {o.live} live
+            </span>
+          }
+          value={fmt.n(o.sessions)}
+          sub={
+            <>
+              <Change value={o.sessionsChange} /> {o.sessionsChange !== undefined ? 'vs the window before' : `${days} days`}
+            </>
+          }
+        />
+        <Stat
+          label="Conversion"
+          value={fmt.pct(o.conversion)}
+          sub={
+            <>
+              <Change value={o.conversionChange} points /> to {s.funnelSteps.find((f) => f.id === 'first_payment')?.label.toLowerCase() ?? 'conversion'}
+            </>
+          }
+        />
+        <Stat
+          label="Main intent"
+          text
+          value={main ? main.label : '—'}
+          sub={main ? `${fmt.pct(main.sessions / Math.max(totalIntents, 1), 0)} of ${fmt.n(totalIntents)} stated tasks` : 'No stated tasks yet'}
+        />
+        <Stat
+          label="Biggest fix"
+          text
+          value={biggest ? <Link to={`/fixes/${encodeURIComponent(biggest.key)}`}>{biggest.sourcePage ?? biggest.title}</Link> : 'Nothing blocking'}
+          sub={biggest ? `${fmt.n(biggest.sessionsLost)} sessions lost` : 'No blockers found'}
+        />
+      </div>
+
+      <div className="grid g21 section">
+        <div className="card">
+          <h2>
+            Funnel by agent <span className="faint small">{fmt.n(o.sessions)} sessions</span>
+          </h2>
+          <Funnel rows={s.funnel} agents={agentNames} />
+          {o.mcpConnected > 0 ? (
+            <p className="muted small" style={{ marginTop: 14 }}>
+              {fmt.n(o.mcpConnected)} sessions connected to your MCP server.
+            </p>
+          ) : null}
+        </div>
+        <div className="stack" style={{ gap: 16, alignContent: 'start' }}>
+          <div className="card">
+            <h2>
+              Intents <Link to="/intents">All intents</Link>
+            </h2>
+            <div className="list">
+              {s.intents.length === 0 ? <span className="muted">No stated tasks in this window.</span> : null}
+              {s.intents.map((i) => (
+                <Link key={i.id} to={`/journeys?intent=${encodeURIComponent(i.id)}`}>
+                  <div className="between">
+                    <span className="bold">{i.label}</span>
+                    <span className="muted small">
+                      {fmt.n(i.sessions)} · converts {fmt.pct(i.conversion, 0)}
+                    </span>
+                  </div>
+                  {i.quotes[0] ? <div className="quote small">“{i.quotes[0]}”</div> : null}
+                </Link>
+              ))}
+            </div>
+          </div>
+          <div className="card">
+            <h2>
+              Fix next <Link to="/fixes">All fixes</Link>
+            </h2>
+            <div className="list">
+              {s.fixes.length === 0 ? <span className="muted">Nothing is blocking agents in this window.</span> : null}
+              {s.fixes.map((f) => (
+                <div key={f.key} className="between">
+                  <div style={{ minWidth: 0 }}>
+                    <div className="bold">{f.title}</div>
+                    <div className="muted small">
+                      {fmt.n(f.sessionsLost)} sessions lost{f.beforeStep ? ` · before ${s.funnelSteps.find((x) => x.id === f.beforeStep)?.label.toLowerCase() ?? f.beforeStep}` : ''}
+                    </div>
+                  </div>
+                  <button className="btn" onClick={() => navigate(`/fixes/${encodeURIComponent(f.key)}`)}>
+                    Fix
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid g2 section">
+        <div className="card">
+          <h2>
+            Revenue by agent <Link to="/revenue">Revenue</Link>
+          </h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th className="num">Sessions</th>
+                <th className="num">Converted</th>
+                <th className="num">Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {s.agents.slice(0, 6).map((a) => (
+                <tr key={a.key} className="click" onClick={() => navigate(`/journeys?agent=${encodeURIComponent(a.key)}`)}>
+                  <td>
+                    <AgentName name={a.label} />
+                  </td>
+                  <td className="num">{fmt.n(a.sessions)}</td>
+                  <td className="num">{fmt.pct(a.conversion, 0)}</td>
+                  <td className="num">{fmt.money(a.revenue, s.currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>All agents</td>
+                <td className="num">{fmt.n(o.sessions)}</td>
+                <td className="num">{fmt.pct(o.conversion, 0)}</td>
+                <td className="num">{fmt.money(o.revenue, s.currency)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div className="card">
+          <h2>
+            Arrivals <Link to="/arrivals">Live feed</Link>
+          </h2>
+          <div className="feed">
+            {(arrivals.data?.arrivals ?? []).map((a) => (
+              <Link key={a.id} to={`/journeys/${encodeURIComponent(a.id)}`} className="item">
+                <AgentName name={a.agent.name} surface={a.agent.surface} />
+                <span className="row-flex">
+                  <LabelChip label={a.agent.label} />
+                  <span className="faint small">{a.live ? 'now' : fmt.ago(a.endedAt)}</span>
+                </span>
+                <span className="muted small">found you via {a.discovery.via}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
