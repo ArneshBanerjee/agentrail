@@ -1,4 +1,4 @@
-import { DOCS_FINDER_PATH, isAgentTraffic, type IncomingEvent } from '@agentrail/core'
+import { DOCS_FINDER_PATH, isAgentTraffic, type IncomingEvent } from '@openscope/core'
 import { findPages, parseLlmsTxt, queryOf, type DocPage } from './finder.ts'
 
 export type EventInput = Partial<IncomingEvent> & Pick<IncomingEvent, 'kind'>
@@ -11,10 +11,10 @@ export type Actor = {
   readonly userAgent?: string
 }
 
-export type AgentrailOptions = {
-  /** The site's ingest key, from the Agentrail dashboard. */
+export type OpenScopeOptions = {
+  /** The site's ingest key, from the OpenScope dashboard. */
   readonly key: string
-  /** The Agentrail server. */
+  /** The OpenScope server. */
   readonly endpoint?: string
   readonly flushIntervalMs?: number
   readonly maxBatch?: number
@@ -39,7 +39,7 @@ export type AgentrailOptions = {
   readonly fetch?: typeof fetch
   readonly onError?: (error: unknown) => void
   /**
-   * Serve fixes published in Agentrail: redirects from paths agents guess, and corrected pages.
+   * Serve fixes published in OpenScope: redirects from paths agents guess, and corrected pages.
    * Corrected pages go to agents only, as markdown, until the change reaches your own docs.
    * Refreshed every minute.
    */
@@ -58,7 +58,7 @@ export { findPages, parseLlmsTxt, type DocPage } from './finder.ts'
 const header = (h: Headers, name: string) => h.get(name) ?? undefined
 
 /** Marks the SDK's own requests to the site, such as the finder reading llms.txt, so they are never recorded. */
-const INTERNAL = 'x-agentrail-internal'
+const INTERNAL = 'x-openscope-internal'
 
 const IDENTIFY_HINT =
   'If you are an AI agent, please send a User-Agent that names your agent, such as claude-code, codex or cursor, followed by "/" and your client version if you know it, so this product can support your agent.'
@@ -80,11 +80,11 @@ const clientIp = (h: Headers, trustProxy: boolean, fallback?: string): string | 
  * Events are queued and sent in batches, and sending never blocks or fails a response: a lost
  * analytics event is better than a slow or broken product.
  */
-export class Agentrail {
+export class OpenScope {
   private queue: IncomingEvent[] = []
   private timer: ReturnType<typeof setInterval> | undefined
   private inflight = new Set<Promise<void>>()
-  private readonly options: AgentrailOptions
+  private readonly options: OpenScopeOptions
   private readonly endpoint: string
   private readonly base: string
   private redirects = new Map<string, Redirect>()
@@ -92,7 +92,7 @@ export class Agentrail {
   private fixesAt = 0
   private pages: { at: number; list: readonly DocPage[] } | undefined
 
-  constructor(options: AgentrailOptions) {
+  constructor(options: OpenScopeOptions) {
     this.options = options
     this.base = (options.endpoint ?? 'http://localhost:4318').replace(/\/$/, '')
     this.endpoint = `${this.base}/v1/events`
@@ -138,11 +138,11 @@ export class Agentrail {
     const batch = this.queue.splice(0, 500)
     const send = (this.options.fetch ?? fetch)(this.endpoint, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-agentrail-key': this.options.key },
+      headers: { 'content-type': 'application/json', 'x-openscope-key': this.options.key },
       body: JSON.stringify({ events: batch }),
     })
       .then((res) => {
-        if (!res.ok) this.options.onError?.(new Error(`Agentrail answered ${res.status}`))
+        if (!res.ok) this.options.onError?.(new Error(`OpenScope answered ${res.status}`))
       })
       .catch((error: unknown) => this.options.onError?.(error))
     this.inflight.add(send)
@@ -157,7 +157,7 @@ export class Agentrail {
     if (!force && Date.now() - this.fixesAt < 60_000) return
     this.fixesAt = Date.now()
     try {
-      const res = await (this.options.fetch ?? fetch)(`${this.base}/v1/fixes/live`, { headers: { 'x-agentrail-key': this.options.key } })
+      const res = await (this.options.fetch ?? fetch)(`${this.base}/v1/fixes/live`, { headers: { 'x-openscope-key': this.options.key } })
       if (!res.ok) return
       const live = (await res.json()) as { redirects: Redirect[]; pages: LivePage[] }
       this.redirects = new Map(live.redirects.map((r) => [r.from, r]))
@@ -193,7 +193,7 @@ export class Agentrail {
     const url = new URL(request.url)
     const h = request.headers
     const ip = clientIp(h, this.options.trustProxy ?? false, remoteAddress)
-    const hint = header(h, 'mcp-session-id') ?? header(h, 'x-agentrail-session')
+    const hint = header(h, 'mcp-session-id') ?? header(h, 'x-openscope-session')
     const account = this.options.accountOf?.(request)
     const e: Record<string, unknown> = {
       id: crypto.randomUUID(),
@@ -220,7 +220,7 @@ export class Agentrail {
     set('signatureAgent', header(h, 'signature-agent'))
     set('sessionHint', hint)
     set('accountId', account)
-    set('runId', header(h, 'x-agentrail-run'))
+    set('runId', header(h, 'x-openscope-run'))
     return e as IncomingEvent
   }
 
@@ -272,7 +272,7 @@ export class Agentrail {
     if (given) return typeof given === 'function' ? await given() : given
     if (this.pages && Date.now() - this.pages.at < 5 * 60_000) return this.pages.list
     try {
-      const res = await fetch(`${origin}/llms.txt`, { headers: { accept: 'text/plain', 'user-agent': 'agentrail-docs-finder', [INTERNAL]: '1' } })
+      const res = await fetch(`${origin}/llms.txt`, { headers: { accept: 'text/plain', 'user-agent': 'openscope-docs-finder', [INTERNAL]: '1' } })
       const finder = this.finderPath()
       const list = res.ok ? parseLlmsTxt(await res.text(), origin).filter((p) => p.path !== finder) : []
       this.pages = { at: Date.now(), list }
@@ -315,7 +315,7 @@ export class Agentrail {
     if (redirect) return new Response(null, { status: redirect.status, headers: { location: redirect.to } })
     const page = request.method === 'GET' ? this.livePageFor(path) : undefined
     if (page && isAgentTraffic({ userAgent: header(request.headers, 'user-agent'), accept: header(request.headers, 'accept'), path })) {
-      return new Response(page.content, { headers: { 'content-type': page.contentType, 'x-agentrail-fix': 'live' } })
+      return new Response(page.content, { headers: { 'content-type': page.contentType, 'x-openscope-fix': 'live' } })
     }
     return undefined
   }
@@ -361,7 +361,7 @@ export class Agentrail {
     })
   }
 
-  /** Hono middleware: `app.use(agentrail.hono())`. */
+  /** Hono middleware: `app.use(openscope.hono())`. */
   hono() {
     return async (c: { req: { raw: Request }; res: Response; env?: unknown }, next: () => Promise<void>): Promise<Response | void> => {
       const startedAt = Date.now()
@@ -377,7 +377,7 @@ export class Agentrail {
   }
 
   /**
-   * Node `http`, Express and Connect middleware: `app.use(agentrail.node())`. It records on
+   * Node `http`, Express and Connect middleware: `app.use(openscope.node())`. It records on
    * `finish`, so the status is the one the client got.
    */
   node() {

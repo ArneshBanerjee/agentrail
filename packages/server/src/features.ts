@@ -1,4 +1,4 @@
-import { groupIntents } from '@agentrail/core'
+import { groupIntents } from '@openscope/core'
 import type { Hono } from 'hono'
 import type { AppContext } from './app.ts'
 import { registerDrains } from './drains.ts'

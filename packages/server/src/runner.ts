@@ -9,13 +9,13 @@ import type { WorkspaceSettings } from './store.ts'
  * agents were given before and after the change, and counting how many runs get past the step that
  * stopped them.
  *
- * Every request a run makes carries `X-Agentrail-Run`. The SDK records it as the run id, so the
+ * Every request a run makes carries `X-OpenScope-Run`. The SDK records it as the run id, so the
  * outcome is measured by the product's own collector, the same way real traffic is, and never mixes
  * with real traffic. When the target has no collector, the agent's own report is used and the run
  * says so.
  */
 
-export const RUN_HEADER = 'X-Agentrail-Run'
+export const RUN_HEADER = 'X-OpenScope-Run'
 
 export type RunnerAgent = { readonly id: string; readonly label: string; readonly ready: boolean; readonly detail: string }
 
@@ -76,7 +76,7 @@ Rules:
 const runClaude = async (input: RunInput): Promise<RunOutcome> => {
   const binary = findClaude(input.env)
   if (!binary) throw new Error('Claude Code is not installed on this server.')
-  const cwd = mkdtempSync(join(tmpdir(), 'agentrail-run-'))
+  const cwd = mkdtempSync(join(tmpdir(), 'openscope-run-'))
   try {
     const { text } = await runClaudeCode(brief(input), 'You are an AI agent completing a task for a person. Report honestly whether you succeeded.', {
       binary,
@@ -157,7 +157,7 @@ You will get the response status, headers and body back.`
     try {
       const res = await fetcher(url, {
         method,
-        headers: { 'user-agent': `agentrail-runner (${input.agent})`, ...(step.headers ?? {}), [RUN_HEADER]: input.runId },
+        headers: { 'user-agent': `openscope-runner (${input.agent})`, ...(step.headers ?? {}), [RUN_HEADER]: input.runId },
         ...(step.body && method !== 'GET' && method !== 'HEAD' ? { body: step.body } : {}),
       })
       const body = (await res.text()).slice(0, 6000)

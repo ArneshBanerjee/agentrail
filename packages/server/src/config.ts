@@ -13,10 +13,10 @@ export type Config = {
 }
 
 export const loadConfig = (env: NodeJS.ProcessEnv = process.env): Config => {
-  const dataDir = resolve(env.AGENTRAIL_DATA_DIR ?? 'data')
+  const dataDir = resolve(env.OPENSCOPE_DATA_DIR ?? 'data')
   mkdirSync(dataDir, { recursive: true })
   const secretFile = join(dataDir, 'secret')
-  let secret = env.AGENTRAIL_SECRET
+  let secret = env.OPENSCOPE_SECRET
   if (!secret) {
     if (!existsSync(secretFile)) writeFileSync(secretFile, randomBytes(32).toString('hex'), { mode: 0o600 })
     secret = readFileSync(secretFile, 'utf8').trim()
@@ -26,7 +26,7 @@ export const loadConfig = (env: NodeJS.ProcessEnv = process.env): Config => {
     port,
     dataDir,
     secret,
-    ...(env.AGENTRAIL_ADMIN_TOKEN ? { adminToken: env.AGENTRAIL_ADMIN_TOKEN } : {}),
-    publicUrl: env.AGENTRAIL_PUBLIC_URL ?? `http://localhost:${port}`,
+    ...(env.OPENSCOPE_ADMIN_TOKEN ? { adminToken: env.OPENSCOPE_ADMIN_TOKEN } : {}),
+    publicUrl: env.OPENSCOPE_PUBLIC_URL ?? `http://localhost:${port}`,
   }
 }

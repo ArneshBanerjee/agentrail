@@ -1,7 +1,7 @@
 {
-  "name": "@agentrail/server",
+  "name": "@openscope/server",
   "version": "0.1.0",
-  "description": "Agentrail server: ingest, storage, dashboard API, fixes and the agent runner.",
+  "description": "OpenScope server: ingest, storage, dashboard API, fixes and the agent runner.",
   "license": "MIT",
   "type": "module",
   "private": true,
@@ -9,7 +9,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@agentrail/core": "^0.1.0",
+    "@openscope/core": "^0.1.0",
     "@anthropic-ai/sdk": "^0.134.0",
     "@google/genai": "^2.30.0",
     "@hono/node-server": "^2.1.5",

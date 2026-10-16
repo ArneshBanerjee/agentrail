@@ -1,18 +1,18 @@
-# Agentrail plan
+# OpenScope plan
 
-Agentrail is a free, open-source, self-hosted platform for the agent customer journey. It shows
+OpenScope is a free, open-source, self-hosted platform for the agent customer journey. It shows
 which AI agents visit a product, what task each agent has, the steps it takes, where it stops, and
 the revenue that follows. It then prepares fixes, publishes them, and measures the change.
 
 The feature set matches the public description of Scope (tryscope.com). The name, the design and
-the text are our own. Agentrail takes its privacy design from Blindfold: sensitive values are
+the text are our own. OpenScope takes its privacy design from Blindfold: sensitive values are
 removed before anything is stored.
 
 ## Feature list
 
-Each row is a feature that Scope shows in public. The last column is where Agentrail builds it.
+Each row is a feature that Scope shows in public. The last column is where OpenScope builds it.
 
-| # | Feature | Scope shows | Agentrail |
+| # | Feature | Scope shows | OpenScope |
 |---|---|---|---|
 | F1 | See the moment agents visit | "4 live", arrivals feed | Live arrivals over SSE, in the Overview and Arrivals pages |
 | F2 | Name each agent, with evidence | Verified, declared, inferred labels | `core/attribution`: Web Bot Auth signature (verified), user agent or header (declared), behaviour (inferred) |
@@ -35,18 +35,18 @@ Each row is a feature that Scope shows in public. The last column is where Agent
 | F19 | Workspaces | Sample workspace | Workspaces, sites and ingest keys |
 | F20 | Agents that never run scripts | "Your analytics miss their visits" | Server-side collection only. Nothing depends on page JavaScript |
 
-Agentrail adds one feature that Scope does not claim:
+OpenScope adds one feature that Scope does not claim:
 
 | F21 | Privacy by default | not stated | Paths, queries, intents and headers pass through `core/redact` before they are stored. IPs are kept only as a keyed hash |
 
 ## Demo parity
 
-What the public Journeys demo video (2026-10-14) shows, frame by frame, and what Agentrail does for
+What the public Journeys demo video (2026-10-14) shows, frame by frame, and what OpenScope does for
 each. The rule from the demo that matters most: a person types a normal task into plain Claude Code,
 with no plugin and no instruction about the product, and the journey still appears, named and with
 its task.
 
-| # | The demo shows | How Agentrail does it |
+| # | The demo shows | How OpenScope does it |
 |---|---|---|
 | V1 | Plain Claude Code: "set up the best usage-based billing system for me" | Nothing is installed in the agent. Everything is collected on the product's side |
 | V2 | The task appears as "intent declared · POST /api/docs/find · via docs finder" | The SDK serves a docs finder. `llms.txt` points agents to it, and agents use it because it returns the right pages. The query they send is their task |
@@ -67,13 +67,13 @@ its task.
 
 All collectors produce the same `AgentEvent` (see `packages/core/src/events.ts`).
 
-1. **HTTP middleware** (`@agentrail/sdk`). Node `http`, Express, Hono, Next.js middleware and
+1. **HTTP middleware** (`@openscope/sdk`). Node `http`, Express, Hono, Next.js middleware and
    Cloudflare Workers. It records each request: method, path, status, user agent, signature
    headers, referrer, accept type and timing. It sends batches to the server and never blocks the
    response.
-2. **Track API** (`@agentrail/sdk`). `track('signed_in')`, `identify(accountId)`, `intent(text)` and
+2. **Track API** (`@openscope/sdk`). `track('signed_in')`, `identify(accountId)`, `intent(text)` and
    `search(query)` for steps that only the product knows about.
-3. **MCP wrapper** (`@agentrail/sdk/mcp`). Wraps a server from `@modelcontextprotocol/sdk`. It
+3. **MCP wrapper** (`@openscope/sdk/mcp`). Wraps a server from `@modelcontextprotocol/sdk`. It
    records connect, tool calls, tool errors and the client name, and it reads an intent from the
    tool arguments when the client sends one.
 4. **Log drains** (`server`). Vercel log drain and Cloudflare Logpush endpoints, and an nginx or
@@ -193,7 +193,7 @@ Each milestone ends with green tests and one or more commits. Each is usable on 
 
 ## What is not known
 
-- Scope does not say how it collects data or how it gets the task text. Agentrail uses the
+- Scope does not say how it collects data or how it gets the task text. OpenScope uses the
   collectors above. The intent text is only as good as what agents send.
 - Codex and Cursor do not publish a user agent. They are labelled from MCP client names, Web Bot Auth
   if they adopt it, or behaviour.

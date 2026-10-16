@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
-import { Agentrail } from '@agentrail/sdk'
+import { OpenScope } from '@openscope/sdk'
 import { extend } from '../src/features.ts'
 import { parseDraft } from '../src/fixes.ts'
 import { runApiAgent, RUN_HEADER } from '../src/runner.ts'
@@ -35,7 +35,7 @@ const traffic = () => {
 const AUTH_KEY = 'failed_call:auth:401:X-Api-Key rejected'
 
 const withFixes = (extra: Parameters<typeof extend>[2] = {}) => {
-  const env = { AGENTRAIL_CLAUDE_BIN: FAKE_CLAUDE }
+  const env = { OPENSCOPE_CLAUDE_BIN: FAKE_CLAUDE }
   return setup({ extend: (app, ctx) => extend(app, ctx, { env, ...extra }) })
 }
 
@@ -103,11 +103,11 @@ test('drafting with Claude Code, then publishing as a GitHub pull request', asyn
   expect(await published.json()).toMatchObject({ status: 'published', prUrl: 'https://github.com/acme/docs/pull/7' })
   const put = github.find((g) => g.method === 'PUT')!
   expect(Buffer.from(put.body.content, 'base64').toString()).toContain('Authorization: Bearer')
-  expect(put.body.branch).toMatch(/^agentrail\/fix-/)
+  expect(put.body.branch).toMatch(/^openscope\/fix-/)
   expect(github.find((g) => g.url.endsWith('/pulls'))!.body).toMatchObject({ base: 'main' })
   expect((await get(`${path}?days=7`)).body.impact).toBeDefined()
   // The corrected page is live for agents at once, at the path they read before failing.
-  const live: any = await (await app.request('/v1/fixes/live', { headers: { 'x-agentrail-key': site.ingestKey } })).json()
+  const live: any = await (await app.request('/v1/fixes/live', { headers: { 'x-openscope-key': site.ingestKey } })).json()
   expect(live.pages).toEqual([{ path: '/docs/api-keys', content: drafted.draft.after, contentType: 'text/markdown; charset=utf-8' }])
 })
 
@@ -117,7 +117,7 @@ test('a missing page publishes as a redirect that the SDK then serves', async ()
   const key = 'not_found:/docs/usage-billing'
   const res = await app.request(`/api/fixes/${encodeURIComponent(key)}/publish`, { method: 'POST' })
   expect(res.status).toBe(200)
-  const sdk = new Agentrail({ key: site.ingestKey, endpoint: 'http://agentrail.test', applyFixes: true, flushIntervalMs: 0, fetch: ((u: string, i: RequestInit) => app.request(u, i)) as typeof fetch })
+  const sdk = new OpenScope({ key: site.ingestKey, endpoint: 'http://openscope.test', applyFixes: true, flushIntervalMs: 0, fetch: ((u: string, i: RequestInit) => app.request(u, i)) as typeof fetch })
   await sdk.refreshFixes(true)
   const handler = sdk.handler(async () => new Response('page'))
   const out = await handler(new Request('https://docs.x.test/docs/usage-billing', { headers: { 'user-agent': CODEX } }))

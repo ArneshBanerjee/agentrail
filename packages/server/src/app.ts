@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
-import { attribute, breakdown, byAgent, byDiscovery, byLandingPage, bySurface, groupIntents, type StoredEvent } from '@agentrail/core'
+import { attribute, breakdown, byAgent, byDiscovery, byLandingPage, bySurface, groupIntents, type StoredEvent } from '@openscope/core'
 import { Analyzer, currencyOf, summarize, type Window } from './analysis.ts'
 import type { Config } from './config.ts'
 import { ingest, type IngestDeps, type Verifier } from './ingest.ts'
@@ -112,7 +112,7 @@ export const createApp = (deps: AppDeps) => {
   app.get('/healthz', (c) => c.json({ ok: true }))
 
   app.post('/v1/events', async (c) => {
-    const key = c.req.header('x-agentrail-key') ?? c.req.header('authorization')?.replace(/^Bearer\s+/i, '')
+    const key = c.req.header('x-openscope-key') ?? c.req.header('authorization')?.replace(/^Bearer\s+/i, '')
     let body: unknown
     try {
       body = await c.req.json()
@@ -129,7 +129,7 @@ export const createApp = (deps: AppDeps) => {
     const given =
       c.req.header('authorization')?.replace(/^Bearer\s+/i, '') ??
       c.req.query('token') ??
-      /(?:^|;\s*)agentrail_token=([^;]+)/.exec(c.req.header('cookie') ?? '')?.[1]
+      /(?:^|;\s*)openscope_token=([^;]+)/.exec(c.req.header('cookie') ?? '')?.[1]
     if (given !== config.adminToken) return c.json({ error: 'unauthorised' }, 401)
     return next()
   })

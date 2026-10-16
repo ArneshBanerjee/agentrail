@@ -1,4 +1,4 @@
-import { DEFAULT_FUNNEL, LIVE_WINDOW_MS, stepName, timeline, type FunnelStep, type Session } from '@agentrail/core'
+import { DEFAULT_FUNNEL, LIVE_WINDOW_MS, stepName, timeline, type FunnelStep, type Session } from '@openscope/core'
 
 const wireOf = (e: Session['events'][number]) =>
   e.path ? `${e.method ?? (e.kind === 'request' ? 'GET' : 'POST')} ${e.path}${e.status ? ` ${e.status}` : ''}` : (e.tool ?? e.step ?? e.kind)

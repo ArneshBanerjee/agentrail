@@ -1,19 +1,19 @@
-# Agentrail guide
+# OpenScope guide
 
 The details behind the [README](../README.md).
 
 ## Collectors
 
-The SDK runs inside your product and sends agent traffic to Agentrail. Requests from people are
+The SDK runs inside your product and sends agent traffic to OpenScope. Requests from people are
 dropped inside the SDK and never leave your server.
 
 | Your server | Code |
 |---|---|
-| Express or Node `http` | `app.use(agentrail.node())` |
-| Hono | `app.use(agentrail.hono())` |
-| Next.js, Bun, Deno | `export default agentrail.handler(yourHandler)` |
-| Cloudflare Workers | `export default { fetch: agentrail.worker(yourHandler) }` |
-| MCP server | `instrument(new McpServer(...), agentrail)` from `@agentrail/sdk/mcp` |
+| Express or Node `http` | `app.use(openscope.node())` |
+| Hono | `app.use(openscope.hono())` |
+| Next.js, Bun, Deno | `export default openscope.handler(yourHandler)` |
+| Cloudflare Workers | `export default { fetch: openscope.worker(yourHandler) }` |
+| MCP server | `instrument(new McpServer(...), openscope)` from `@openscope/sdk/mcp` |
 
 The Setup page in the dashboard shows each one with your ingest key filled in.
 
@@ -23,17 +23,17 @@ Without code changes, you can also send logs:
 |---|---|
 | Vercel log drain | `/v1/drains/vercel/<ingest key>` |
 | Cloudflare Logpush | `/v1/drains/cloudflare/<ingest key>` |
-| nginx or Apache logs | `npx -p @agentrail/sdk agentrail import-log access.log --key <ingest key>` |
+| nginx or Apache logs | `npx -p @openscope/sdk openscope import-log access.log --key <ingest key>` |
 | Stripe payments | Webhook to `/v1/stripe/<ingest key>` for `charge.succeeded` and `charge.failed` |
 
 ## The docs finder
 
 The SDK serves a docs finder at `/api/docs/find`. An agent sends what it is trying to do and gets
-back the pages that answer it. The query it sends is its task, which is how Agentrail learns what
+back the pages that answer it. The query it sends is its task, which is how OpenScope learns what
 plain agents want. Add two lines to your `llms.txt`:
 
 ```ts
-import { llmsTxtAgentNote, llmsTxtLine } from '@agentrail/sdk'
+import { llmsTxtAgentNote, llmsTxtLine } from '@openscope/sdk'
 
 const llmsTxt = `# Your product
 
@@ -44,7 +44,7 @@ ${llmsTxtLine('https://docs.example.com')}
 - [Quickstart](/docs/quickstart): ...`
 ```
 
-The finder reads its pages from your `llms.txt`. When an agent states no task, Agentrail shows one
+The finder reads its pages from your `llms.txt`. When an agent states no task, OpenScope shows one
 inferred from the docs it read, and marks it as inferred.
 
 ## Funnel steps
@@ -53,9 +53,9 @@ Most steps show up in plain HTTP: a package download is Installed, and a device 
 succeeds is Signed in. For other steps, call the SDK:
 
 ```ts
-agentrail.track('installed', { sessionHint: cliSessionId })
-agentrail.identify(account.id, { sessionHint: cliSessionId })
-agentrail.payment({ accountId: account.id, amount: 4900, currency: 'usd' })
+openscope.track('installed', { sessionHint: cliSessionId })
+openscope.identify(account.id, { sessionHint: cliSessionId })
+openscope.payment({ accountId: account.id, amount: 4900, currency: 'usd' })
 ```
 
 You can change the funnel steps and name your intents in Settings.
@@ -85,7 +85,7 @@ With no model, fixes still show the problem and a rule-based change where one ex
 
 ## Fixes
 
-Agentrail groups what stopped agents and ranks it by the revenue at risk. The top fixes are drafted
+OpenScope groups what stopped agents and ranks it by the revenue at risk. The top fixes are drafted
 in the background. Confirm publishes a fix:
 
 - The corrected page goes to agents at once, from any collector with `applyFixes: true`. People still
@@ -108,11 +108,11 @@ after" on the fix page.
 | Variable | Default | Meaning |
 |---|---|---|
 | `PORT` | `4318` | Port to listen on |
-| `AGENTRAIL_DATA_DIR` | `./data` | Where the database and the hashing secret live |
-| `AGENTRAIL_ADMIN_TOKEN` | unset | Password for the dashboard. Set it on any shared machine |
-| `AGENTRAIL_PUBLIC_URL` | `http://localhost:<port>` | The address collectors send to |
-| `AGENTRAIL_WEB_BOT_AUTH` | on | `off` stops checking agent signatures |
-| `AGENTRAIL_CLAUDE_BIN` | `claude` | Where the Claude Code CLI is |
+| `OPENSCOPE_DATA_DIR` | `./data` | Where the database and the hashing secret live |
+| `OPENSCOPE_ADMIN_TOKEN` | unset | Password for the dashboard. Set it on any shared machine |
+| `OPENSCOPE_PUBLIC_URL` | `http://localhost:<port>` | The address collectors send to |
+| `OPENSCOPE_WEB_BOT_AUTH` | on | `off` stops checking agent signatures |
+| `OPENSCOPE_CLAUDE_BIN` | `claude` | Where the Claude Code CLI is |
 
 The Docker image has no Claude Code in it. To use Claude Code as the model, run the server where
 `claude` is installed, or use an API key.

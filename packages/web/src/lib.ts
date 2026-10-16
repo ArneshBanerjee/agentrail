@@ -19,10 +19,10 @@ const write = (key: string, value: string | undefined) => {
 }
 
 export const session = {
-  token: () => read('agentrail.token'),
-  setToken: (t: string | undefined) => write('agentrail.token', t),
-  workspace: () => read('agentrail.workspace'),
-  setWorkspace: (w: string) => write('agentrail.workspace', w),
+  token: () => read('openscope.token'),
+  setToken: (t: string | undefined) => write('openscope.token', t),
+  workspace: () => read('openscope.workspace'),
+  setWorkspace: (w: string) => write('openscope.workspace', w),
 }
 
 export class ApiError extends Error {
@@ -132,7 +132,7 @@ export const setQuery = (patch: Record<string, string | undefined>) => {
 /* ---------- Window and live ---------- */
 
 const windowListeners = new Set<() => void>()
-let days = Number(read('agentrail.days') ?? 30) || 30
+let days = Number(read('openscope.days') ?? 30) || 30
 let range: { from: number; to: number } | undefined
 // One key that changes whenever the window changes, so pages refetch on a new custom range too.
 let windowKey = `d${days}`
@@ -151,7 +151,7 @@ export const useDays = () => {
   const set = (d: number) => {
     days = d
     range = undefined
-    write('agentrail.days', String(d))
+    write('openscope.days', String(d))
     notify()
   }
   // With a custom range, `days` is its length, for text such as "12 days". `api()` sends the exact range.

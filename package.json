@@ -1,5 +1,5 @@
 {
-  "name": "agentrail",
+  "name": "openscope",
   "private": true,
   "version": "0.1.0",
   "description": "Open-source analytics for the agent customer journey: which AI agents use your product, what they came to do, where they stop, and what to fix.",
@@ -16,11 +16,11 @@
     "typecheck": "tsc -p packages/core && tsc -p packages/sdk && tsc -p packages/server && tsc -p packages/web && tsc -p examples/ledgerly",
     "test": "vitest run",
     "dev": "node scripts/dev.mjs",
-    "build": "npm run build -w @agentrail/core && npm run build -w @agentrail/sdk && npm run build -w @agentrail/web",
-    "start": "npm run build -w @agentrail/web --silent -- --logLevel error && node --env-file-if-exists=.env --conditions=source packages/server/src/main.ts",
+    "build": "npm run build -w @openscope/core && npm run build -w @openscope/sdk && npm run build -w @openscope/web",
+    "start": "npm run build -w @openscope/web --silent -- --logLevel error && node --env-file-if-exists=.env --conditions=source packages/server/src/main.ts",
     "seed": "node --conditions=source packages/server/src/seed.ts",
     "example": "node --env-file-if-exists=.env --conditions=source examples/ledgerly/server.ts",
-    "pack": "npm run build -w @agentrail/core -w @agentrail/sdk --silent && mkdir -p packages-dist && npm pack -w @agentrail/core -w @agentrail/sdk --pack-destination packages-dist --silent"
+    "pack": "npm run build -w @openscope/core -w @openscope/sdk --silent && mkdir -p packages-dist && npm pack -w @openscope/core -w @openscope/sdk --pack-destination packages-dist --silent"
   },
   "engines": {
     "node": ">=22.18"

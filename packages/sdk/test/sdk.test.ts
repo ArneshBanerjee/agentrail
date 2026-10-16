@@ -1,17 +1,17 @@
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { expect, test } from 'vitest'
-import { Agentrail, llmsTxtLine } from '../src/index.ts'
+import { OpenScope, llmsTxtLine } from '../src/index.ts'
 
 const CHROME = 'Mozilla/5.0 (Macintosh) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
 
-const collector = (options: Partial<ConstructorParameters<typeof Agentrail>[0]> = {}) => {
+const collector = (options: Partial<ConstructorParameters<typeof OpenScope>[0]> = {}) => {
   const batches: any[][] = []
   const fake = (async (_url: string, init: RequestInit) => {
     batches.push(JSON.parse(String(init.body)).events)
     return new Response('{}', { status: 202 })
   }) as typeof fetch
-  const ar = new Agentrail({ key: 'ar_test', flushIntervalMs: 0, fetch: fake, ...options })
+  const ar = new OpenScope({ key: 'ar_test', flushIntervalMs: 0, fetch: fake, ...options })
   return { ar, batches, sent: () => batches.flat() }
 }
 
@@ -22,7 +22,7 @@ test('the fetch wrapper records agent requests with status, type and error, and 
     return new Response('# Docs', { headers: { 'content-type': 'text/markdown' } })
   })
   await app(new Request('https://docs.tripe.test/llms.txt', { headers: { 'user-agent': 'codex_cli_rs/0.46.0' } }))
-  await app(new Request('https://api.tripe.test/v1/meters?x=1', { method: 'POST', headers: { 'user-agent': 'python-requests/2.32', 'x-agentrail-session': 's1' } }))
+  await app(new Request('https://api.tripe.test/v1/meters?x=1', { method: 'POST', headers: { 'user-agent': 'python-requests/2.32', 'x-openscope-session': 's1' } }))
   await app(new Request('https://docs.tripe.test/docs', { headers: { 'user-agent': CHROME } }))
   await app(new Request('https://docs.tripe.test/app.js', { headers: { 'user-agent': 'codex_cli_rs/0.46.0' } }))
   await ar.flush()
@@ -79,7 +79,7 @@ test('track, identify, intent, search and payment', async () => {
 
 test('a full queue flushes on its own, and a failed send reports instead of throwing', async () => {
   const errors: unknown[] = []
-  const ar = new Agentrail({ key: 'k', flushIntervalMs: 0, maxBatch: 2, fetch: (async () => { throw new Error('down') }) as typeof fetch, onError: (e) => errors.push(e) })
+  const ar = new OpenScope({ key: 'k', flushIntervalMs: 0, maxBatch: 2, fetch: (async () => { throw new Error('down') }) as typeof fetch, onError: (e) => errors.push(e) })
   ar.track('a')
   ar.track('b')
   await ar.close()
@@ -168,12 +168,12 @@ test('published corrected pages go to agents as markdown, and people still get t
     if (String(url).endsWith('/v1/fixes/live')) return Response.json({ redirects: [], pages: [{ path: '/docs/api-keys', content: '# API keys\nUse Authorization: Bearer.', contentType: 'text/markdown; charset=utf-8' }] })
     return new Response('{}', { status: 202 })
   }) as typeof fetch
-  const ar = new Agentrail({ key: 'k', flushIntervalMs: 0, applyFixes: true, fetch: fake })
+  const ar = new OpenScope({ key: 'k', flushIntervalMs: 0, applyFixes: true, fetch: fake })
   await ar.refreshFixes(true)
   const app = ar.handler(async () => new Response('<html>old page</html>', { headers: { 'content-type': 'text/html' } }))
   const agent = await app(new Request('https://docs.x.test/docs/api-keys', { headers: { 'user-agent': 'Claude-User (claude-code/2.1.288)' } }))
   expect(await agent.text()).toContain('Authorization: Bearer')
-  expect(agent.headers.get('x-agentrail-fix')).toBe('live')
+  expect(agent.headers.get('x-openscope-fix')).toBe('live')
   const person = await app(new Request('https://docs.x.test/docs/api-keys', { headers: { 'user-agent': CHROME } }))
   expect(await person.text()).toBe('<html>old page</html>')
 })

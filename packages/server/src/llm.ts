@@ -5,7 +5,7 @@ import OpenAI from 'openai'
 import type { LlmProvider, WorkspaceSettings } from './store.ts'
 
 /**
- * One interface for every model Agentrail calls: drafting fixes, naming intents and the agent
+ * One interface for every model OpenScope calls: drafting fixes, naming intents and the agent
  * runner. Four providers sit behind it. Claude Code is the one that needs no API key: it runs
  * headless on this machine with the plan its user is signed in with.
  */
@@ -42,13 +42,13 @@ export type LlmEnv = {
   readonly OPENAI_BASE_URL?: string | undefined
   readonly GEMINI_API_KEY?: string | undefined
   readonly GOOGLE_API_KEY?: string | undefined
-  readonly AGENTRAIL_CLAUDE_BIN?: string | undefined
+  readonly OPENSCOPE_CLAUDE_BIN?: string | undefined
 }
 
 /** Probed once per binary per process. A `claude` installed later is picked up on restart. */
 const claudeFound = new Map<string, boolean>()
 export const findClaude = (env: LlmEnv = process.env): string | undefined => {
-  const candidate = env.AGENTRAIL_CLAUDE_BIN ?? 'claude'
+  const candidate = env.OPENSCOPE_CLAUDE_BIN ?? 'claude'
   if (!claudeFound.has(candidate)) {
     const probe = spawnSync(candidate, ['--version'], { encoding: 'utf8', timeout: 5000 })
     claudeFound.set(candidate, probe.status === 0)

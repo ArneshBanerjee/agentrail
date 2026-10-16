@@ -1,4 +1,4 @@
-import { keywords } from '@agentrail/core'
+import { keywords } from '@openscope/core'
 
 /**
  * A docs finder: an agent sends what it is trying to do and gets back the pages that answer it.

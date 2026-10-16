@@ -3,7 +3,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { chatFor, defaultProvider, LlmError, providerStatus } from '../src/llm.ts'
 
 const FAKE_CLAUDE = join(import.meta.dirname, 'fixtures/fake-claude.mjs')
-const NO_CLAUDE = { AGENTRAIL_CLAUDE_BIN: '/nonexistent/claude' }
+const NO_CLAUDE = { OPENSCOPE_CLAUDE_BIN: '/nonexistent/claude' }
 
 /** Captures what each SDK puts on the wire and answers with a canned body. */
 const stubFetch = (body: unknown) => {
@@ -64,7 +64,7 @@ test('Gemini: system instruction and model role mapping', async () => {
 })
 
 test('Claude Code: headless, isolated, no tools, prompt on stdin', async () => {
-  const chat = chatFor('claude-code', {}, { AGENTRAIL_CLAUDE_BIN: FAKE_CLAUDE })
+  const chat = chatFor('claude-code', {}, { OPENSCOPE_CLAUDE_BIN: FAKE_CLAUDE })
   const echoed = JSON.parse(await chat(request)) as { args: string[]; input: string }
   expect(echoed.input).toBe('Fix the header.')
   expect(echoed.args.slice(0, 3)).toEqual(['-p', '--output-format', 'json'])
@@ -76,7 +76,7 @@ test('Claude Code: headless, isolated, no tools, prompt on stdin', async () => {
 })
 
 test('provider status and the default choice', () => {
-  const env = { AGENTRAIL_CLAUDE_BIN: FAKE_CLAUDE, OPENAI_API_KEY: 'o' }
+  const env = { OPENSCOPE_CLAUDE_BIN: FAKE_CLAUDE, OPENAI_API_KEY: 'o' }
   expect(providerStatus({}, env).map((p) => [p.id, p.ready])).toEqual([
     ['claude-code', true],
     ['anthropic', false],
@@ -107,6 +107,6 @@ test('a schema goes to each provider in its own structured output form', async (
   await chatFor('gemini', {}, { ...NO_CLAUDE, GEMINI_API_KEY: 'k' })({ ...request, schema: SCHEMA })
   expect(gemini[0]!.body.generationConfig).toMatchObject({ responseMimeType: 'application/json', responseJsonSchema: SCHEMA.schema })
 
-  const echoed = JSON.parse(await chatFor('claude-code', {}, { AGENTRAIL_CLAUDE_BIN: FAKE_CLAUDE })({ ...request, schema: SCHEMA })) as { args: string[] }
+  const echoed = JSON.parse(await chatFor('claude-code', {}, { OPENSCOPE_CLAUDE_BIN: FAKE_CLAUDE })({ ...request, schema: SCHEMA })) as { args: string[] }
   expect(JSON.parse(echoed.args[echoed.args.indexOf('--json-schema') + 1]!)).toEqual(SCHEMA.schema)
 })

@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto'
-import { IncomingBatch, redactPath, redactQuery, redactText, type IncomingEvent, type StoredEvent } from '@agentrail/core'
+import { IncomingBatch, redactPath, redactQuery, redactText, type IncomingEvent, type StoredEvent } from '@openscope/core'
 import type { Site, Store } from './store.ts'
 
 export type Verifier = (event: IncomingEvent) => Promise<string | undefined>

@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
-import { DEFAULT_CONVERSION_STEP, DEFAULT_FUNNEL, type FunnelStep, type IntentDefinition, type StoredEvent } from '@agentrail/core'
+import { DEFAULT_CONVERSION_STEP, DEFAULT_FUNNEL, type FunnelStep, type IntentDefinition, type StoredEvent } from '@openscope/core'
 
 export type Workspace = { readonly id: string; readonly name: string; readonly createdAt: number }
 export type Site = { readonly id: string; readonly workspaceId: string; readonly name: string; readonly host: string; readonly ingestKey: string }
@@ -126,7 +126,7 @@ export class Store {
   }
 
   createSite(workspaceId: string, name: string, host: string): Site {
-    const site = { id: randomUUID(), workspaceId, name, host, ingestKey: `ar_${randomBytes(18).toString('base64url')}` }
+    const site = { id: randomUUID(), workspaceId, name, host, ingestKey: `os_${randomBytes(18).toString('base64url')}` }
     this.db
       .prepare('INSERT INTO sites (id, workspace_id, name, host, ingest_key) VALUES (?, ?, ?, ?, ?)')
       .run(site.id, site.workspaceId, site.name, site.host, site.ingestKey)

@@ -46,7 +46,7 @@ const sign = (body: string, secret: string, t = Math.floor((T0 + 120_000) / 1000
 test('Stripe: signed charges become payments for the account, everything else is refused or ignored', async () => {
   const { app, site, store, workspace } = withDrains()
   const url = `/v1/stripe/${site.ingestKey}`
-  const ok = stripeEvent('charge.succeeded', { amount: 4900, currency: 'usd', customer: 'cus_1', metadata: { agentrail_account: 'acct_7' } })
+  const ok = stripeEvent('charge.succeeded', { amount: 4900, currency: 'usd', customer: 'cus_1', metadata: { openscope_account: 'acct_7' } })
   expect((await app.request(url, { method: 'POST', body: ok, headers: { 'stripe-signature': sign(ok, 'whsec_x') } })).status).toBe(400)
   store.saveSettings(workspace.id, { ...store.settings(workspace.id), stripe: { webhookSecret: 'whsec_x' } })
   expect((await app.request(url, { method: 'POST', body: ok, headers: { 'stripe-signature': sign(ok, 'wrong') } })).status).toBe(400)
@@ -75,7 +75,7 @@ test('the import-log CLI sends only agent lines to a running server', async () =
   const server = serve({ fetch: app.fetch, port: 0 })
   await new Promise((r) => server.once('listening', r))
   const port = (server.address() as { port: number }).port
-  const dir = mkdtempSync(join(tmpdir(), 'agentrail-log-'))
+  const dir = mkdtempSync(join(tmpdir(), 'openscope-log-'))
   const file = join(dir, 'access.log')
   writeFileSync(
     file,

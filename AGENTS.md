@@ -1,6 +1,6 @@
-# Agentrail: rules for contributors and coding agents
+# OpenScope: rules for contributors and coding agents
 
-Agentrail shows how AI agents use a product: who arrives, what task they have, where they stop, and
+OpenScope shows how AI agents use a product: who arrives, what task they have, where they stop, and
 what to fix. The full plan is in `docs/PLAN.md`.
 
 ## Commands

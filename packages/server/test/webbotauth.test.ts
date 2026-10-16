@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest'
 import { generateNonce, sign } from 'web-bot-auth'
 import { signerFromJWK } from 'web-bot-auth/crypto'
-import { Agentrail } from '@agentrail/sdk'
+import { OpenScope } from '@openscope/sdk'
 import { isPrivateAddress, safeFetchJson, verifier } from '../src/webbotauth.ts'
 import { setup, T0 } from './helpers.ts'
 
@@ -28,7 +28,7 @@ test('a signed request through the SDK and ingest comes out verified, named by i
     },
   })
   const { app, site, get } = setup({ verify, now: () => T0 + 120_000 })
-  const sdk = new Agentrail({ key: site.ingestKey, endpoint: 'http://agentrail.test', flushIntervalMs: 0, fetch: ((u: string, i: RequestInit) => app.request(u, i)) as typeof fetch })
+  const sdk = new OpenScope({ key: site.ingestKey, endpoint: 'http://openscope.test', flushIntervalMs: 0, fetch: ((u: string, i: RequestInit) => app.request(u, i)) as typeof fetch })
   const handler = sdk.handler(async () => new Response('docs'))
 
   // Each request is signed when it is made, so the clock the SDK stamps matches the signature.

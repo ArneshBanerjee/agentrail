@@ -1,4 +1,4 @@
-import type { IncomingEvent } from '@agentrail/core'
+import type { IncomingEvent } from '@openscope/core'
 
 /**
  * A month of agent traffic for a made-up payments API called Ledgerly, for the demo workspace and

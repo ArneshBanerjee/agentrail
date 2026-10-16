@@ -3,12 +3,12 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { expect, test } from 'vitest'
 import { z } from 'zod'
-import { Agentrail } from '../src/index.ts'
+import { OpenScope } from '../src/index.ts'
 import { instrument } from '../src/mcp.ts'
 
 test('connects, tool calls, tool errors and declared tasks are recorded with the client name', async () => {
   const batches: any[][] = []
-  const agentrail = new Agentrail({
+  const openscope = new OpenScope({
     key: 'k',
     flushIntervalMs: 0,
     fetch: (async (_u: string, init: RequestInit) => {
@@ -16,7 +16,7 @@ test('connects, tool calls, tool errors and declared tasks are recorded with the
       return new Response('{}', { status: 202 })
     }) as typeof fetch,
   })
-  const server = instrument(new McpServer({ name: 'ledgerly', version: '1.0.0' }), agentrail, { declareTaskTool: true })
+  const server = instrument(new McpServer({ name: 'ledgerly', version: '1.0.0' }), openscope, { declareTaskTool: true })
   server.registerTool('create_meter', { inputSchema: { event_name: z.string().optional() } }, async ({ event_name }) =>
     event_name ? { content: [{ type: 'text', text: 'ok' }] } : { isError: true, content: [{ type: 'text', text: 'missing field: event_name' }] },
   )
@@ -32,7 +32,7 @@ test('connects, tool calls, tool errors and declared tasks are recorded with the
   await client.callTool({ name: 'create_meter', arguments: { event_name: 'api_call' } })
   await client.callTool({ name: 'create_meter', arguments: {} })
   await client.callTool({ name: 'explode', arguments: {} }).catch(() => undefined)
-  await agentrail.flush()
+  await openscope.flush()
 
   const events = batches.flat()
   expect(events.map((e) => [e.kind, e.tool ?? e.text ?? '', e.ok ?? null])).toEqual([

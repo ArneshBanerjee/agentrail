@@ -1,7 +1,7 @@
 {
-  "name": "@agentrail/core",
+  "name": "@openscope/core",
   "version": "0.1.0",
-  "description": "Pure logic for Agentrail: events, attribution, redaction, journeys, funnels, intents, revenue and fixes.",
+  "description": "Pure logic for OpenScope: events, attribution, redaction, journeys, funnels, intents, revenue and fixes.",
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -22,7 +22,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ArneshBanerjee/agentrail.git",
+    "url": "git+https://github.com/ArneshBanerjee/openscope.git",
     "directory": "packages/core"
   }
 }

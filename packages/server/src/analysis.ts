@@ -8,7 +8,7 @@ import {
   overview,
   rankFixes,
   type Session,
-} from '@agentrail/core'
+} from '@openscope/core'
 import type { Store } from './store.ts'
 
 const DAY = 86_400_000

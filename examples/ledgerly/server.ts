@@ -1,15 +1,15 @@
 import { randomBytes } from 'node:crypto'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { Agentrail, llmsTxtAgentNote, llmsTxtLine } from '@agentrail/sdk'
+import { OpenScope, llmsTxtAgentNote, llmsTxtLine } from '@openscope/sdk'
 
 /**
- * Ledgerly: a small, fake usage-billing API with docs, used to show Agentrail end to end. Point a
+ * Ledgerly: a small, fake usage-billing API with docs, used to show OpenScope end to end. Point a
  * plain coding agent at it with an ordinary task, and watch the journey in the dashboard.
  *
  * It has the same flaw on purpose that the demo shows: the API keys guide documents the wrong auth
  * header. The API only accepts `Authorization: Bearer`, and its 401 says so.
  *
- *   AGENTRAIL_KEY=ar_... node examples/ledgerly/server.ts
+ *   OPENSCOPE_KEY=os_... node examples/ledgerly/server.ts
  */
 
 const PORT = Number(process.env.PORT ?? 4400)
@@ -21,14 +21,14 @@ const keys = new Map<string, string>() // api key -> account
 const devices = new Map<string, { polls: number; account: string; key?: string }>()
 const meters = new Map<string, { id: string; account: string; event_name: string; events: number; value: number }>()
 
-const agentrail = new Agentrail({
-  key: process.env.AGENTRAIL_KEY ?? 'missing-key',
-  endpoint: process.env.AGENTRAIL_ENDPOINT ?? 'http://localhost:4318',
+const openscope = new OpenScope({
+  key: process.env.OPENSCOPE_KEY ?? 'missing-key',
+  endpoint: process.env.OPENSCOPE_ENDPOINT ?? 'http://localhost:4318',
   applyFixes: true,
   accountOf: (request) => keys.get((request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')),
-  onError: (error) => console.error('agentrail:', (error as Error).message),
+  onError: (error) => console.error('openscope:', (error as Error).message),
 })
-const collect = agentrail.node()
+const collect = openscope.node()
 
 const DOCS: Record<string, { title: string; description: string; body: string }> = {
   '/docs/quickstart': {
@@ -154,7 +154,7 @@ const app = async (req: IncomingMessage, res: ServerResponse) => {
     if (APPROVE_AFTER === 0 || device.polls < APPROVE_AFTER) return send(res, 428, { error: 'authorization_pending' })
     device.key ??= `sk_test_${randomBytes(12).toString('hex')}`
     keys.set(device.key, device.account)
-    agentrail.identify(device.account, { userAgent: req.headers['user-agent'] ?? '', ...(req.socket.remoteAddress ? { ip: req.socket.remoteAddress.replace(/^::ffff:/, '') } : {}) })
+    openscope.identify(device.account, { userAgent: req.headers['user-agent'] ?? '', ...(req.socket.remoteAddress ? { ip: req.socket.remoteAddress.replace(/^::ffff:/, '') } : {}) })
     return send(res, 200, { api_key: device.key, account: device.account })
   }
 
@@ -183,7 +183,7 @@ const app = async (req: IncomingMessage, res: ServerResponse) => {
     if (req.method === 'POST' && path === '/v1/subscriptions') {
       const body = await readJson(req)
       // Test mode: the first invoice is paid at once, so the journey reaches its first payment.
-      agentrail.payment({ accountId: account, amount: 2900, currency: 'usd' })
+      openscope.payment({ accountId: account, amount: 2900, currency: 'usd' })
       return send(res, 200, { id: `sub_${randomBytes(4).toString('hex')}`, status: 'active', price_per_unit: body.price_per_unit ?? 0.002 })
     }
   }

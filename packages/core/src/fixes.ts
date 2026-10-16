@@ -241,7 +241,7 @@ const propose = (b: Blocker, knownPaths: readonly string[], sourcePage: string |
       if (!target || !b.path) return { summary: `Add a page at ${b.path}, or redirect it to the page agents need.`, needsDraft: true }
       return {
         summary: `Redirect ${b.path} to ${target}. Agents guess this path, and the page they want is ${target}.`,
-        patch: { file: 'agentrail.redirects.json', content: `${JSON.stringify([{ from: b.path, to: target, status: 308 }], null, 2)}\n` },
+        patch: { file: 'openscope.redirects.json', content: `${JSON.stringify([{ from: b.path, to: target, status: 308 }], null, 2)}\n` },
         needsDraft: false,
       }
     }

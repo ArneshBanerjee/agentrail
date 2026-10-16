@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { groupIntents, rankFixes, type FixCandidate, type Session } from '@agentrail/core'
+import { groupIntents, rankFixes, type FixCandidate, type Session } from '@openscope/core'
 import type { Hono } from 'hono'
 import type { AppContext } from './app.ts'
 import { findDocsFile, openPullRequest, type GitHubConfig } from './github.ts'
@@ -184,7 +184,7 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
   const currentPage = async (base: string, path: string) => {
     for (const url of [`${base.replace(/\/$/, '')}${path}.md`, `${base.replace(/\/$/, '')}${path}`]) {
       try {
-        const res = await (deps.fetcher ?? fetch)(url, { headers: { accept: 'text/markdown, text/plain;q=0.9', 'user-agent': 'agentrail-fixes' }, signal: AbortSignal.timeout(5000) })
+        const res = await (deps.fetcher ?? fetch)(url, { headers: { accept: 'text/markdown, text/plain;q=0.9', 'user-agent': 'openscope-fixes' }, signal: AbortSignal.timeout(5000) })
         if (res.ok && /markdown|text\/plain/i.test(res.headers.get('content-type') ?? '')) return { path: path.replace(/^\//, ''), content: await res.text() }
       } catch {
         // The next form, then no "before".
@@ -297,8 +297,8 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
             path: record.draft.file,
             content: record.draft.after,
             title: `Fix for agents: ${found.fix.title}`.slice(0, 120),
-            branchName: `agentrail/fix-${randomUUID().slice(0, 8)}`,
-            body: `${record.draft.summary}\n\n${found.fix.sessionsLost} agent sessions stopped on this problem (${found.fix.detail}).\n\nPrepared by Agentrail from redacted agent sessions. Drafted with ${record.draft.provider}.`,
+            branchName: `openscope/fix-${randomUUID().slice(0, 8)}`,
+            body: `${record.draft.summary}\n\n${found.fix.sessionsLost} agent sessions stopped on this problem (${found.fix.detail}).\n\nPrepared by OpenScope from redacted agent sessions. Drafted with ${record.draft.provider}.`,
           },
           deps.fetcher,
         )
@@ -359,7 +359,7 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
    * missing pages, and corrected pages that the SDK serves to agents until the docs change lands.
    */
   app.get('/v1/fixes/live', (c) => {
-    const key = c.req.header('x-agentrail-key')
+    const key = c.req.header('x-openscope-key')
     const site = key ? store.siteByKey(key) : undefined
     if (!site) return c.json({ error: 'unknown ingest key' }, 401)
     const published = store.fixes(site.workspaceId).filter((r) => r.status === 'published')

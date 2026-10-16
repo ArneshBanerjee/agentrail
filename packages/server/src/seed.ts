@@ -33,7 +33,7 @@ export const seedDemo = async (store: Store, secret: string, now: number) => {
 
 if (import.meta.main) {
   const config = loadConfig()
-  const store = new Store(join(config.dataDir, 'agentrail.sqlite'))
+  const store = new Store(join(config.dataDir, 'openscope.sqlite'))
   store.ensureDefaults(Date.now())
   const result = await seedDemo(store, config.secret, Date.now())
   console.log(`Demo workspace "${result.workspace.name}": ${result.stored} of ${result.events} events stored.`)

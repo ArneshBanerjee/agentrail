@@ -73,13 +73,13 @@ const SignIn = ({ onDone }: { onDone: () => void }) => {
         }}
       >
         <div className="brand">
-          <img src="/favicon.svg" alt="" /> Agentrail
+          <img src="/favicon.svg" alt="" /> OpenScope
         </div>
         <label className="field">
           Admin token
           <input type="password" value={token} onChange={(e) => setToken(e.target.value)} autoFocus />
         </label>
-        <span className="muted small">The value of AGENTRAIL_ADMIN_TOKEN on your server.</span>
+        <span className="muted small">The value of OPENSCOPE_ADMIN_TOKEN on your server.</span>
         {error ? <span className="down small">{error}</span> : null}
         <button className="btn primary" type="submit">
           Open dashboard
@@ -101,7 +101,7 @@ export const App = () => {
   const me = useApi<Me>('/api/me', [authed])
   const [collapsed, setCollapsed] = useState(() => {
     try {
-      return localStorage.getItem('agentrail.sidebar') === 'collapsed'
+      return localStorage.getItem('openscope.sidebar') === 'collapsed'
     } catch {
       return false
     }
@@ -124,7 +124,7 @@ export const App = () => {
   const toggleSidebar = () => {
     setCollapsed((c) => {
       try {
-        localStorage.setItem('agentrail.sidebar', c ? 'open' : 'collapsed')
+        localStorage.setItem('openscope.sidebar', c ? 'open' : 'collapsed')
       } catch {
         // Not remembered, which is fine.
       }
@@ -141,7 +141,7 @@ export const App = () => {
     <div className={`shell ${collapsed ? 'collapsed' : ''}`}>
       <aside className="side">
         <div className="brand">
-          <img src="/favicon.svg" alt="" /> Agentrail
+          <img src="/favicon.svg" alt="" /> OpenScope
         </div>
         <nav className="nav stack" style={{ gap: 2 }}>
           {NAV.map((n) => (
@@ -173,7 +173,7 @@ export const App = () => {
           <input type="checkbox" checked={inDemo} disabled={demoBusy} onChange={() => void toggleDemo()} />
           <span className="muted">{demoBusy ? 'Loading demo…' : 'Demo'}</span>
         </label>
-        <a className="faint small" href="https://github.com/ArneshBanerjee/agentrail" target="_blank" rel="noreferrer" style={{ padding: '4px 8px' }}>
+        <a className="faint small" href="https://github.com/ArneshBanerjee/openscope" target="_blank" rel="noreferrer" style={{ padding: '4px 8px' }}>
           {me.data?.version ? `v${me.data.version} · ` : ''}open source · MIT
         </a>
       </aside>
@@ -224,7 +224,7 @@ export const App = () => {
           </div>
         </header>
         <Toasts />
-        <main className="page">{me.error && !(me.error instanceof ApiError && me.error.status === 401) ? <div className="banner warn">Cannot reach the Agentrail server: {me.error.message}</div> : node}</main>
+        <main className="page">{me.error && !(me.error instanceof ApiError && me.error.status === 401) ? <div className="banner warn">Cannot reach the OpenScope server: {me.error.message}</div> : node}</main>
       </div>
     </div>
   )

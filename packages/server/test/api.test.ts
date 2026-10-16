@@ -15,9 +15,9 @@ const codexJourney = [
 test('ingest needs a valid key and a valid batch', async () => {
   const { post, site } = setup()
   expect((await post('/v1/events', { events: codexJourney })).status).toBe(401)
-  expect((await post('/v1/events', { events: codexJourney }, { 'x-agentrail-key': 'nope' })).status).toBe(401)
-  expect((await post('/v1/events', { events: [{ id: 'x' }] }, { 'x-agentrail-key': site.ingestKey })).status).toBe(400)
-  expect((await post('/v1/events', 'not json', { 'x-agentrail-key': site.ingestKey })).status).toBe(400)
+  expect((await post('/v1/events', { events: codexJourney }, { 'x-openscope-key': 'nope' })).status).toBe(401)
+  expect((await post('/v1/events', { events: [{ id: 'x' }] }, { 'x-openscope-key': site.ingestKey })).status).toBe(400)
+  expect((await post('/v1/events', 'not json', { 'x-openscope-key': site.ingestKey })).status).toBe(400)
 })
 
 test('stored events are redacted and hashed before they reach the database', async () => {

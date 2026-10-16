@@ -1,6 +1,6 @@
 /**
  * The four GitHub calls a published fix needs: read the file, branch, commit, open a pull request.
- * A pull request and not a direct commit, so a person reviews every change Agentrail proposes.
+ * A pull request and not a direct commit, so a person reviews every change OpenScope proposes.
  */
 
 export type GitHubConfig = { readonly repo: string; readonly token: string; readonly branch?: string | undefined }

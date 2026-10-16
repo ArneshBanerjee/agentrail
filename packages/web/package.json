@@ -1,7 +1,7 @@
 {
-  "name": "@agentrail/web",
+  "name": "@openscope/web",
   "version": "0.1.0",
-  "description": "Agentrail dashboard.",
+  "description": "OpenScope dashboard.",
   "license": "MIT",
   "type": "module",
   "private": true,

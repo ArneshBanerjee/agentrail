@@ -3,7 +3,7 @@ import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
 import { HTTP_MESSAGE_SIGNATURES_DIRECTORY, jwkToKeyID, parseSignatureAgentCard, verify, type SignatureAgentEntry } from 'web-bot-auth'
 import { verifierFromJWK } from 'web-bot-auth/crypto'
-import type { IncomingEvent } from '@agentrail/core'
+import type { IncomingEvent } from '@openscope/core'
 import type { Verifier } from './ingest.ts'
 
 /**
@@ -72,12 +72,12 @@ const keysFor = async (entry: SignatureAgentEntry, fetchJson: KeyFetcher): Promi
 export type VerifierOptions = {
   readonly fetchJson?: KeyFetcher
   readonly now?: () => number
-  /** Set AGENTRAIL_WEB_BOT_AUTH=off to never fetch keys. Nothing is then labelled verified. */
+  /** Set OPENSCOPE_WEB_BOT_AUTH=off to never fetch keys. Nothing is then labelled verified. */
   readonly enabled?: boolean
 }
 
 export const verifier = (options: VerifierOptions = {}): Verifier => {
-  const enabled = options.enabled ?? process.env.AGENTRAIL_WEB_BOT_AUTH !== 'off'
+  const enabled = options.enabled ?? process.env.OPENSCOPE_WEB_BOT_AUTH !== 'off'
   const fetchJson = options.fetchJson ?? safeFetchJson
   const now = options.now ?? (() => Date.now())
   type Found = { host: string; keys: JsonWebKey[] }

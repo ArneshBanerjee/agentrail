@@ -1,4 +1,4 @@
-import type { Attribution, Blocker, BreakdownRow, Discovery, FixCandidate, FunnelRow, IntentGroup, Overview, TimelineItem } from '@agentrail/core'
+import type { Attribution, Blocker, BreakdownRow, Discovery, FixCandidate, FunnelRow, IntentGroup, Overview, TimelineItem } from '@openscope/core'
 
 export type { Attribution, Blocker, BreakdownRow, FixCandidate, FunnelRow, IntentGroup, Overview, TimelineItem }
 

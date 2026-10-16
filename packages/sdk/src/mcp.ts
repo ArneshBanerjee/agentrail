@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { Agentrail } from './index.ts'
+import type { OpenScope } from './index.ts'
 
 export type InstrumentOptions = {
   /**
@@ -21,9 +21,9 @@ type ToolResult = { isError?: boolean; content?: { type: string; text?: string }
  * blocker like a failing API call.
  *
  * Wraps the server in place and returns it, so it drops into existing code:
- * `const server = instrument(new McpServer(...), agentrail)`.
+ * `const server = instrument(new McpServer(...), openscope)`.
  */
-export const instrument = <S extends McpServer>(server: S, agentrail: Agentrail, options: InstrumentOptions = {}): S => {
+export const instrument = <S extends McpServer>(server: S, openscope: OpenScope, options: InstrumentOptions = {}): S => {
   // stdio has no session id. One server instance serves one client, so the instance is the session.
   const instanceHint = `mcp-${crypto.randomUUID()}`
   const client = () => server.server.getClientVersion()
@@ -41,7 +41,7 @@ export const instrument = <S extends McpServer>(server: S, agentrail: Agentrail,
 
   const previous = server.server.oninitialized
   server.server.oninitialized = () => {
-    agentrail.record({ kind: 'mcp_connect', source: 'mcp', ...actor() })
+    openscope.record({ kind: 'mcp_connect', source: 'mcp', ...actor() })
     previous?.()
   }
 
@@ -52,10 +52,10 @@ export const instrument = <S extends McpServer>(server: S, agentrail: Agentrail,
         const result = (await callback(...args)) as ToolResult
         const failed = result?.isError === true
         const error = failed ? result.content?.find((c) => c.type === 'text')?.text?.slice(0, 300) : undefined
-        agentrail.record({ kind: 'mcp_tool', source: 'mcp', tool: name, ok: !failed, ...(error ? { error } : {}), ...actor(extra) })
+        openscope.record({ kind: 'mcp_tool', source: 'mcp', tool: name, ok: !failed, ...(error ? { error } : {}), ...actor(extra) })
         return result
       } catch (e) {
-        agentrail.record({ kind: 'mcp_tool', source: 'mcp', tool: name, ok: false, error: String((e as Error)?.message ?? e).slice(0, 300), ...actor(extra) })
+        openscope.record({ kind: 'mcp_tool', source: 'mcp', tool: name, ok: false, error: String((e as Error)?.message ?? e).slice(0, 300), ...actor(extra) })
         throw e
       }
     }
@@ -80,7 +80,7 @@ export const instrument = <S extends McpServer>(server: S, agentrail: Agentrail,
         inputSchema: { task: z.string().max(1000) },
       },
       async ({ task }: { task: string }, extra: Extra) => {
-        agentrail.record({ kind: 'intent', source: 'mcp', text: task, ...actor(extra) })
+        openscope.record({ kind: 'intent', source: 'mcp', text: task, ...actor(extra) })
         return { content: [{ type: 'text', text: 'Thank you. Continue with your task.' }] }
       },
     )

@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { gunzipSync } from 'node:zlib'
-import { isAgentTraffic, parseCloudflareLog, parseVercelLog, type IncomingEvent } from '@agentrail/core'
+import { isAgentTraffic, parseCloudflareLog, parseVercelLog, type IncomingEvent } from '@openscope/core'
 import type { Context, Hono } from 'hono'
 import type { AppContext } from './app.ts'
 import { ingestEvents } from './ingest.ts'
@@ -56,7 +56,7 @@ type StripeCharge = {
 
 export const registerDrains = (app: Hono, ctx: AppContext) => {
   // Vercel checks a new drain by asking for this header back.
-  app.get('/v1/drains/vercel/:key', (c) => c.body(null, 200, process.env.AGENTRAIL_VERCEL_VERIFY ? { 'x-vercel-verify': process.env.AGENTRAIL_VERCEL_VERIFY } : {}))
+  app.get('/v1/drains/vercel/:key', (c) => c.body(null, 200, process.env.OPENSCOPE_VERCEL_VERIFY ? { 'x-vercel-verify': process.env.OPENSCOPE_VERCEL_VERIFY } : {}))
 
   app.post('/v1/drains/vercel/:key', async (c) => {
     let records: unknown[]
@@ -85,7 +85,7 @@ export const registerDrains = (app: Hono, ctx: AppContext) => {
   /**
    * Payments from Stripe. A charge is the unit, because a subscription renewal also produces a
    * charge, and counting invoices too would count it twice. The account is the customer's
-   * `metadata.agentrail_account`, which should be the id passed to `identify()`, or the customer id.
+   * `metadata.openscope_account`, which should be the id passed to `identify()`, or the customer id.
    */
   app.post('/v1/stripe/:key', async (c) => {
     const site = ctx.store.siteByKey(c.req.param('key'))
@@ -97,7 +97,7 @@ export const registerDrains = (app: Hono, ctx: AppContext) => {
     const event = JSON.parse(body) as { id: string; type: string; created: number; data: { object: StripeCharge } }
     if (event.type !== 'charge.succeeded' && event.type !== 'charge.failed') return c.json({ ignored: event.type })
     const charge = event.data.object
-    const account = charge.metadata?.agentrail_account ?? charge.customer ?? undefined
+    const account = charge.metadata?.openscope_account ?? charge.customer ?? undefined
     if (!account) return c.json({ ignored: 'charge has no customer' })
     const ok = event.type === 'charge.succeeded'
     const failure = [charge.failure_code, charge.failure_message].filter(Boolean).join(': ')
