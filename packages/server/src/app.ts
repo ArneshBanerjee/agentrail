@@ -84,6 +84,10 @@ export const createApp = (deps: AppDeps) => {
     return (asked && all.find((w) => w.id === asked)?.id) || all[0]!.id
   }
   const windowOf = (c: Context): Window => {
+    // An exact range wins over a number of days. A year at most, so one request cannot load everything.
+    const fromQ = Number(c.req.query('from'))
+    const toQ = Number(c.req.query('to'))
+    if (fromQ > 0 && toQ > fromQ) return { from: Math.max(fromQ, toQ - 366 * DAY), to: toQ }
     const days = Math.min(Math.max(Number(c.req.query('days') ?? 30) || 30, 1), 365)
     const to = Number(c.req.query('to') ?? now()) || now()
     return { from: to - days * DAY, to }

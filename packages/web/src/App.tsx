@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, Toasts } from './components.tsx'
-import { api, ApiError, connectLive, session, useApi, useDays, useLiveState, useLocation } from './lib.ts'
+import { api, ApiError, connectLive, session, useApi, useDays, useLiveState, useLocation, useRange } from './lib.ts'
 import { Agents } from './pages/Agents.tsx'
 import { Arrivals } from './pages/Arrivals.tsx'
 import { FixDetail, Fixes } from './pages/Fixes.tsx'
@@ -92,6 +92,10 @@ const SignIn = ({ onDone }: { onDone: () => void }) => {
 export const App = () => {
   const location = useLocation()
   const [days, setDays] = useDays()
+  const [range, setRange, custom] = useRange()
+  const [picking, setPicking] = useState(false)
+  const day = (ts: number) => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const iso = (ts: number) => new Date(ts - new Date(ts).getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
   const live = useLiveState()
   const [authed, setAuthed] = useState(0)
   const me = useApi<Me>('/api/me', [authed])
@@ -147,12 +151,37 @@ export const App = () => {
           <span className="live" title={live === 'on' ? 'Receiving arrivals live' : 'Live updates are not connected'}>
             <span className={`dot ${live === 'on' ? 'on' : ''}`} /> {live === 'on' ? 'Live' : 'Offline'}
           </span>
+          <span className="muted small" title="The time window">
+            {day(range.from)} – {day(range.to)}
+          </span>
+          {picking ? (
+            <span className="row-flex">
+              <input type="date" aria-label="From" defaultValue={iso(range.from)} max={iso(Date.now())} id="range-from" />
+              <input type="date" aria-label="To" defaultValue={iso(range.to)} max={iso(Date.now())} id="range-to" />
+              <button
+                className="btn"
+                onClick={() => {
+                  // Dates are the person's own days, so read them in local time. The end date counts in full.
+                  const local = (id: string) => new Date(`${(document.getElementById(id) as HTMLInputElement).value}T00:00`).getTime()
+                  const from = local('range-from')
+                  const to = local('range-to') + 86_399_999
+                  if (from > 0 && to > from) setRange({ from, to: Math.min(to, Date.now()) })
+                  setPicking(false)
+                }}
+              >
+                Apply
+              </button>
+            </span>
+          ) : null}
           <div className="seg" role="group" aria-label="Time window">
             {[1, 7, 30, 90].map((d) => (
-              <button key={d} className={days === d ? 'on' : ''} onClick={() => setDays(d)}>
+              <button key={d} className={!custom && days === d ? 'on' : ''} onClick={() => setDays(d)}>
                 {d === 1 ? '24h' : `${d}d`}
               </button>
             ))}
+            <button className={custom ? 'on' : ''} onClick={() => setPicking((p) => !p)}>
+              Custom
+            </button>
           </div>
         </header>
         <Toasts />

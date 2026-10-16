@@ -33,7 +33,18 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * A custom range replaces `days=` on list and summary requests. Lookups of one session or one fix are
+ * left alone, so an item outside the range still opens.
+ */
+const withRange = (path: string) => {
+  const r = range
+  if (!r || !/[?&]days=/.test(path) || /^\/api\/(sessions|fixes)\/[^?]/.test(path)) return path
+  return path.replace(/([?&])days=\d+/, `$1from=${r.from}&to=${r.to}`)
+}
+
 export const api = async <T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> => {
+  path = withRange(path)
   const headers: Record<string, string> = { ...(init.headers as Record<string, string>) }
   const token = session.token()
   if (token) headers.authorization = `Bearer ${token}`
@@ -55,7 +66,14 @@ export const api = async <T>(path: string, init: RequestInit & { json?: unknown 
 }
 
 /** Refetches when `deps` change and when `bump()` is called, for example on a live arrival. */
+const subscribeWindow = (l: () => void) => {
+  windowListeners.add(l)
+  return () => windowListeners.delete(l)
+}
+
 export const useApi = <T,>(path: string | undefined, deps: unknown[] = []) => {
+  // A new time window refetches every request, even when the path reads the same.
+  const win = useSyncExternalStore(subscribeWindow, () => windowKey)
   const [data, setData] = useState<T>()
   const [error, setError] = useState<ApiError>()
   const [loading, setLoading] = useState(true)
@@ -72,7 +90,7 @@ export const useApi = <T,>(path: string | undefined, deps: unknown[] = []) => {
       alive = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, tick, ...deps])
+  }, [path, tick, win, ...deps])
   const reload = useCallback(() => setTick((t) => t + 1), [])
   return { data, error, loading, reload }
 }
@@ -115,20 +133,46 @@ export const setQuery = (patch: Record<string, string | undefined>) => {
 
 const windowListeners = new Set<() => void>()
 let days = Number(read('agentrail.days') ?? 30) || 30
+let range: { from: number; to: number } | undefined
+// One key that changes whenever the window changes, so pages refetch on a new custom range too.
+let windowKey = `d${days}`
+const notify = () => {
+  windowKey = range ? `r${range.from}-${range.to}` : `d${days}`
+  windowListeners.forEach((l) => l())
+}
 export const useDays = () => {
-  const value = useSyncExternalStore(
+  useSyncExternalStore(
     (l) => {
       windowListeners.add(l)
       return () => windowListeners.delete(l)
     },
-    () => days,
+    () => windowKey,
   )
   const set = (d: number) => {
     days = d
+    range = undefined
     write('agentrail.days', String(d))
-    windowListeners.forEach((l) => l())
+    notify()
   }
+  // With a custom range, `days` is its length, for text such as "12 days". `api()` sends the exact range.
+  const value = range ? Math.max(1, Math.round((range.to - range.from) / 86_400_000)) : days
   return [value, set] as const
+}
+
+export const useRange = () => {
+  useSyncExternalStore(
+    (l) => {
+      windowListeners.add(l)
+      return () => windowListeners.delete(l)
+    },
+    () => windowKey,
+  )
+  const set = (r: { from: number; to: number } | undefined) => {
+    range = r
+    notify()
+  }
+  const now = Date.now()
+  return [range ?? { from: now - days * 86_400_000, to: now }, set, range !== undefined] as const
 }
 
 export type Arrival = { agent: string; label: string; surface: string; path?: string; kind: string; ts: number }

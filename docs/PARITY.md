@@ -20,7 +20,7 @@ says how it was checked:
 | V6 | Step tracker with times | Live | Session view for runs 3 and 4 |
 | V7 | Steps by phase with plain names, polls counted, "session ended · Integration complete" | Live, Test | Session view; test `the timeline groups by phase` |
 | V8 | Steps appear as they happen | Live | Session view polls and follows the live stream while a session is live |
-| V9 | Overview cards: Traffic, Conversion rate, Main intent, Biggest fix | Live | Demo workspace |
+| V9 | Overview cards: Traffic, Conversion rate, Main intent, Biggest fix, and a date range | Live | Demo workspace; a custom range of Oct 9 to Oct 15 showed 318 sessions, up 10% on the week before |
 | V10 | Funnel as stacked columns per agent, drop between columns, MCP connected column | Live | Demo workspace |
 | V11 | Fix dialog: action title, evidence with share of the drop, docs patch "In preview", Cancel and Confirm | Live | Demo workspace, and the real Ledgerly fix drafted by Claude Code |
 | V12 | Confirm, and it is "live in production" | Live | After Confirm, Ledgerly served the corrected page to agents within a minute; people still got the old page |
@@ -57,7 +57,6 @@ says how it was checked:
 
 | Gap | Note |
 |---|---|
-| Custom date range | The demo has a date picker. Agentrail has 24 hours, 7, 30 and 90 days |
 | Agent names the demo shows that we cannot match | Muse and Instinct publish no user agent or MCP client name we know of. They appear as Unnamed until a rule is added |
 | Live API keys | Anthropic, OpenAI and Gemini were tested with stubbed transports, not real keys |
 | GitHub, Stripe, Vercel, Cloudflare | Tested with recorded shapes, not live accounts |

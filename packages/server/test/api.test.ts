@@ -106,3 +106,10 @@ test('fix drafting and the session gap are workspace settings', async () => {
   await app.request('/api/settings', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ autoDraft: false, sessionGapMinutes: 5 }) })
   expect(store.settings(workspace.id)).toMatchObject({ autoDraft: false, sessionGapMinutes: 5 })
 })
+
+test('an exact from and to window wins over days', async () => {
+  const { send, get } = setup()
+  await send(codexJourney)
+  expect((await get(`/api/summary?from=${T0 - 1000}&to=${T0 + 100_000}`)).body.overview.sessions).toBe(1)
+  expect((await get(`/api/summary?from=${T0 + 10_000}&to=${T0 + 100_000}`)).body.overview.sessions).toBe(0)
+})
