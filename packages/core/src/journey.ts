@@ -253,8 +253,15 @@ export const findBlockers = (events: readonly StoredEvent[]): Blocker[] => {
   const blockers: Blocker[] = []
   const signinStarted: StoredEvent[] = []
   let lastRead: string | undefined
+  // The last page about auth. An auth failure comes from the page that taught the agent to sign its
+  // requests, which is rarely the last page it read.
+  let lastAuthRead: string | undefined
   let apiWorked = false
-  const push = (b: Blocker) => blockers.push(lastRead ? { ...b, after: lastRead } : b)
+  const push = (b: Blocker) => {
+    const isAuth = b.kind === 'failed_call' && (b.status === 401 || b.status === 403)
+    const after = (isAuth ? lastAuthRead : undefined) ?? lastRead
+    blockers.push(after ? { ...b, after } : b)
+  }
   for (const e of events) {
     const path = e.path ? normalizePath(e.path) : undefined
     // A sign-in poll that answers "pending" is waiting for a person, not failing. RFC 8628 answers
@@ -302,7 +309,10 @@ export const findBlockers = (events: readonly StoredEvent[]): Blocker[] => {
     if ((e.kind === 'step' && e.step === 'signin_started') || (e.kind === 'request' && ok && /\/device\/(start|code)$/.test(e.path ?? ''))) signinStarted.push(e)
     if (e.kind === 'request' && ok && looksLikeApi(e.path ?? '', e.host) && !/\/(device|cli|oauth|docs)\//.test(e.path ?? '')) apiWorked = true
     // The page an agent last read, for a fix to edit. Downloads and API reads are not pages.
-    if (e.kind === 'request' && (e.method ?? 'GET') === 'GET' && ok && path && !looksLikeApi(e.path ?? '', e.host) && !isDownload(e.path ?? '')) lastRead = path
+    if (e.kind === 'request' && (e.method ?? 'GET') === 'GET' && ok && path && !looksLikeApi(e.path ?? '', e.host) && !isDownload(e.path ?? '')) {
+      lastRead = path
+      if (/auth|api-?keys?|keys|tokens?|credentials/i.test(path)) lastAuthRead = path
+    }
     if ((e.kind === 'step' && e.step === 'signed_in') || (e.kind === 'request' && ok && e.method === 'POST' && /\/(device\/(poll|token)|oauth\/token)$/.test(e.path ?? ''))) signinStarted.length = 0
   }
   for (const e of signinStarted) {

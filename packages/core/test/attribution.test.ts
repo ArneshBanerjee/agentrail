@@ -50,3 +50,12 @@ test('a session takes its strongest name, and the specific one among equals', ()
   expect(strongest([inferred, undefined])?.label).toBe('inferred')
   expect(strongest([attribute({ verifiedOperator: 'claude.ai' }), mcp])?.label).toBe('verified')
 })
+
+test('an agent that names itself without a version is still named, and any non-browser is kept', () => {
+  expect(attribute({ userAgent: 'claude-code' })).toMatchObject({ agentId: 'claude-code', label: 'declared' })
+  expect(attribute({ userAgent: 'Claude Code' })).toMatchObject({ agentId: 'claude-code' })
+  expect(attribute({ userAgent: 'codex' })).toMatchObject({ agentId: 'codex' })
+  expect(attribute({ userAgent: 'my-billing-agent/0.3' })).toMatchObject({ name: 'Unnamed', label: 'inferred', evidence: 'Not a browser: "my-billing-agent"' })
+  expect(attribute({ userAgent: 'kube-probe/1.31' })).toBeUndefined()
+  expect(attribute({ userAgent: 'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)' })).toBeUndefined()
+})

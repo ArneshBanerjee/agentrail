@@ -30,7 +30,7 @@ export const AGENTS: readonly AgentRule[] = [
     operator: 'Anthropic',
     surface: 'terminal',
     kind: 'agent',
-    userAgent: [/\bclaude-cli\//i, /\bclaude-code\//i],
+    userAgent: [/\bclaude-cli\b/i, /\bclaude[- ]code\b/i],
     mcpClients: ['claude-code'],
   },
   {
@@ -51,7 +51,7 @@ export const AGENTS: readonly AgentRule[] = [
     operator: 'OpenAI',
     surface: 'terminal',
     kind: 'agent',
-    userAgent: [/\bcodex_cli_rs\//i, /\bcodex-cli\//i, /^codex\//i],
+    userAgent: [/\bcodex_cli_rs\b/i, /\bcodex-cli\b/i, /^codex\b/i],
     mcpClients: ['codex', 'codex-mcp-client'],
   },
   {
@@ -70,7 +70,7 @@ export const AGENTS: readonly AgentRule[] = [
     operator: 'Anysphere',
     surface: 'editor',
     kind: 'agent',
-    userAgent: [/\bCursor\/\d/i],
+    userAgent: [/\bCursor\/\d/i, /^cursor\b/i],
     mcpClients: ['cursor', 'cursor-vscode'],
   },
   {
@@ -88,7 +88,7 @@ export const AGENTS: readonly AgentRule[] = [
     operator: 'Google',
     surface: 'terminal',
     kind: 'agent',
-    userAgent: [/\bGeminiCLI\//i],
+    userAgent: [/\bGeminiCLI\b/i, /^gemini-cli\b/i],
     mcpClients: ['gemini-cli-mcp-client', 'gemini-cli'],
   },
   {
@@ -138,6 +138,16 @@ export const PROGRAMMATIC_CLIENTS: readonly { readonly pattern: RegExp; readonly
   { pattern: /\bPlaywright\b/i, name: 'Playwright' },
   { pattern: /\bPuppeteer\b/i, name: 'Puppeteer' },
 ]
+
+/**
+ * Every browser a person uses sends "Mozilla/" in its user agent. A client that does not is a
+ * program, so its traffic is kept as an agent's even when no rule names it.
+ */
+export const BROWSER = /\bMozilla\//
+
+/** Programs that are not agents working for a person: health checks, monitors and link previews. */
+export const NOT_AGENTS =
+  /kube-probe|ELB-HealthChecker|GoogleHC|Consul Health|UptimeRobot|Pingdom|StatusCake|Better ?Uptime|Datadog|Prometheus|Blackbox Exporter|Site24x7|Slackbot|facebookexternalhit|Twitterbot|Discordbot|WhatsApp|TelegramBot|LinkedInBot|Embedly|SkypeUriPreview/i
 
 /** Paths that exist for machines. A client that opens one is reading the site as an agent would. */
 export const AGENT_PATHS: readonly string[] = [

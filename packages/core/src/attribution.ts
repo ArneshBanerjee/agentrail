@@ -1,4 +1,4 @@
-import { AGENT_PATHS, AGENTS, PROGRAMMATIC_CLIENTS, type AgentRule, type Surface } from './agents.ts'
+import { AGENT_PATHS, AGENTS, BROWSER, NOT_AGENTS, PROGRAMMATIC_CLIENTS, type AgentRule, type Surface } from './agents.ts'
 import { versionIn } from './steps.ts'
 
 /**
@@ -123,6 +123,12 @@ const infer = (signals: Signals, ua: string): Attribution | undefined => {
   const client = PROGRAMMATIC_CLIENTS.find((c) => c.pattern.test(ua))
   if (client) return unnamed(`client-${client.name.toLowerCase().replaceAll(' ', '-')}`, `Programmatic client: ${client.name}`)
   if (!ua) return unnamed('no-user-agent', 'Sent no user agent')
+  // An agent can name itself in a way no rule knows yet. It is not a browser, so it is not a person,
+  // unless it is one of the programs that only check or preview a page.
+  if (!BROWSER.test(ua) && !NOT_AGENTS.test(ua)) {
+    const token = productToken(ua, 0)
+    return unnamed(`client-${token.toLowerCase()}`, `Not a browser: "${token}"`)
+  }
   return undefined
 }
 

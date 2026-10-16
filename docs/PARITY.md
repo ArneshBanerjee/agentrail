@@ -18,11 +18,11 @@ says how it was checked:
 | V4 | Recent sessions with search and Agent, Reached, Intent filters | Live | Sessions page with demo data |
 | V5 | Session header: agent and version, Live, host, clock, task, "via docs finder" | Live | Run 4 showed "Claude Code 2.1.299" |
 | V6 | Step tracker with times | Live | Session view for runs 3 and 4 |
-| V7 | Steps by phase with plain names, polls counted, "session ended · Integration complete" | Live, Test | Session view; test `the timeline groups by phase` |
+| V7 | Steps by phase with plain names (read, init, sign-in started, poll 3 / 7, subscription created, meter event, usage read), "session ended · Integration complete" | Live, Test | Session view; test `the timeline groups by phase` |
 | V8 | Steps appear as they happen | Live | Session view polls and follows the live stream while a session is live |
 | V9 | Overview cards: Traffic, Conversion rate, Main intent, Biggest fix, and a date range | Live | Demo workspace; a custom range of Oct 9 to Oct 15 showed 318 sessions, up 10% on the week before |
-| V10 | Funnel as stacked columns per agent, drop between columns, MCP connected column | Live | Demo workspace |
-| V11 | Fix dialog: action title, evidence with share of the drop, docs patch "In preview", Cancel and Confirm | Live | Demo workspace, and the real Ledgerly fix drafted by Claude Code |
+| V10 | Funnel as stacked columns per agent, drop between columns, the columns Discovered, Installed, Signed in, First payment, Second payment, MCP connected | Live | Demo workspace shows exactly these six columns |
+| V11 | Fix dialog: action title, the problem as a subtitle, "N agents failed at their first API call. X% of the drop before the first payment comes from one page, /docs/api-keys: …", docs patch "In preview", Cancel and Confirm | Live | On Ledgerly, Claude Code drafted "Fix the authentication sample in the API keys guide" with the subtitle "Wrong auth header in the API keys guide", both as in the demo. The demo workspace shows the sentence in the same form |
 | V12 | Confirm, and it is "live in production" | Live | After Confirm, Ledgerly served the corrected page to agents within a minute; people still got the old page |
 | V13 | More agents complete setup afterwards | Live | Run 5 read the corrected page and made its first API call with no 401. Runs 1, 3 and 4 before the fix each hit the 401 |
 | V14 | Fixes prepared before anyone asks | Live | The demo workspace's top fix was drafted by Claude Code before the dialog was opened |
@@ -53,6 +53,16 @@ says how it was checked:
 | F20 | Agents that run no scripts | Live | Every run |
 | F21 | Privacy by default | Test | `stored events are redacted and hashed before they reach the database`, `redact.test.ts` |
 
+## The rest of the demo screen
+
+| The demo shows | Status | How it was checked |
+|---|---|---|
+| Overview, Sessions and Fixes in the sidebar | Live | Present, beside more pages (Arrivals, Agents, Intents, Revenue, Setup, Settings) |
+| A date range in the header | Live | Presets and a custom range |
+| A demo switch at the bottom of the sidebar | Live | Opens the demo workspace, making it on first use |
+| A version label and a workspace switcher | Live | Sidebar |
+| A button to hide the sidebar | Live | Header |
+
 ## Gaps
 
 | Gap | Note |
@@ -63,4 +73,5 @@ says how it was checked:
 | Web Bot Auth | Tested with the RFC 9421 test key, not a real signing agent |
 | Docker | Built and run on 2026-10-16 (OrbStack, arm64): health check, admin token, dashboard, demo data, and data kept across a restart. The image is 484 MB, with no build tools in it |
 | npm | The packages build and install from a tarball, but are not published |
+| Agents vary between runs | In 9 plain Claude Code runs, most named themselves and sent their task through the docs finder, but not all. An agent that names itself in any way is now kept, and one that does not is still recorded as Unnamed with every step |
 | WebFetch on localhost | Claude Code uses curl for `localhost`, so a local test names it only if it follows the `llms.txt` note. On a public HTTPS site, WebFetch sends `Claude-User (claude-code/...)` |

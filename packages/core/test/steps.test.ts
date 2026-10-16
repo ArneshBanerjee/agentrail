@@ -134,3 +134,13 @@ test('with no stated task, the task is inferred from the specific docs read, and
   expect(s!.inferredIntent).toBe('Billing › Usage based')
   expect(attribute({ userAgent: 'codex/0.46.0' })).toMatchObject({ agentId: 'codex', version: '0.46.0' })
 })
+
+test('an auth failure points at the auth page the agent read, not the last page', () => {
+  n = 500
+  const [s] = buildSessions([
+    req('GET', '/docs/api-keys'),
+    req('GET', '/docs/billing/usage-based'),
+    req('POST', '/v1/meters', 401, { error: 'X-Api-Key rejected' }),
+  ])
+  expect(s!.blockers[0]).toMatchObject({ kind: 'failed_call', after: '/docs/api-keys' })
+})
