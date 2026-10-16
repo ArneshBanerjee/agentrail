@@ -29,6 +29,8 @@ export const DEFAULT_STEP_RULES: readonly StepRule[] = [
   { path: '**/device/token', name: 'poll' },
   { path: '**/oauth/token', name: 'token exchange' },
   { path: '**/login', method: 'POST', name: 'signed in' },
+  { path: '**/event_summaries', method: 'GET', name: 'usage read' },
+  { path: '**/usage', method: 'GET', name: 'usage read' },
 ]
 
 const DOWNLOAD = /\.(?:tgz|tar\.gz|zip|whl|dmg|pkg|exe|msi|deb|rpm|AppImage)$|\/(?:dl|download|downloads|releases)\//i

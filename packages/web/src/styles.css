@@ -306,3 +306,6 @@ pre.code { background: var(--panel-2); border: 1px solid var(--line); border-rad
 @keyframes rot { to { transform: rotate(360deg); } }
 .clickcard { cursor: pointer; transition: border-color 0.15s; }
 .clickcard:hover { border-color: var(--accent); }
+
+.shell.collapsed { grid-template-columns: 1fr; }
+.shell.collapsed .side { display: none; }

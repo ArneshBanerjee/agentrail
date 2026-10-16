@@ -99,6 +99,38 @@ export const App = () => {
   const live = useLiveState()
   const [authed, setAuthed] = useState(0)
   const me = useApi<Me>('/api/me', [authed])
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('agentrail.sidebar') === 'collapsed'
+    } catch {
+      return false
+    }
+  })
+  const [demoBusy, setDemoBusy] = useState(false)
+  const demo = me.data?.workspaces.find((w) => w.name === 'Ledgerly (demo)')
+  const inDemo = !!demo && me.data?.workspaceId === demo.id
+  const toggleDemo = async () => {
+    setDemoBusy(true)
+    try {
+      const target = inDemo ? me.data!.workspaces.find((w) => w.id !== demo!.id) : (demo ?? (await api<{ id: string }>('/api/demo', { method: 'POST' })))
+      if (target) {
+        session.setWorkspace(target.id)
+        window.location.href = '/'
+      }
+    } finally {
+      setDemoBusy(false)
+    }
+  }
+  const toggleSidebar = () => {
+    setCollapsed((c) => {
+      try {
+        localStorage.setItem('agentrail.sidebar', c ? 'open' : 'collapsed')
+      } catch {
+        // Not remembered, which is fine.
+      }
+      return !c
+    })
+  }
   useEffect(() => {
     if (me.data) connectLive()
   }, [me.data])
@@ -106,7 +138,7 @@ export const App = () => {
   const { title, crumb, node } = route(location)
   const path = location.split('?')[0]!
   return (
-    <div className="shell">
+    <div className={`shell ${collapsed ? 'collapsed' : ''}`}>
       <aside className="side">
         <div className="brand">
           <img src="/favicon.svg" alt="" /> Agentrail
@@ -137,12 +169,19 @@ export const App = () => {
             </select>
           </label>
         ) : null}
-        <a className="faint small" href="https://github.com/ArneshBanerjee/agentrail" target="_blank" rel="noreferrer" style={{ padding: '8px' }}>
-          Open source · MIT
+        <label className="row-flex small" style={{ padding: '4px 8px', cursor: 'pointer' }} title="Look around with a month of sample traffic">
+          <input type="checkbox" checked={inDemo} disabled={demoBusy} onChange={() => void toggleDemo()} />
+          <span className="muted">{demoBusy ? 'Loading demo…' : 'Demo'}</span>
+        </label>
+        <a className="faint small" href="https://github.com/ArneshBanerjee/agentrail" target="_blank" rel="noreferrer" style={{ padding: '4px 8px' }}>
+          v0.1 · open source · MIT
         </a>
       </aside>
       <div className="main">
         <header className="top">
+          <button className="btn" aria-label={collapsed ? 'Show the sidebar' : 'Hide the sidebar'} title={collapsed ? 'Show the sidebar' : 'Hide the sidebar'} onClick={toggleSidebar} style={{ padding: '4px 8px' }}>
+            ☰
+          </button>
           <h1>
             {title}
             {crumb ? <span className="crumb"> / {crumb}</span> : null}

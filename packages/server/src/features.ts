@@ -2,6 +2,7 @@ import { groupIntents } from '@agentrail/core'
 import type { Hono } from 'hono'
 import type { AppContext } from './app.ts'
 import { registerDrains } from './drains.ts'
+import { seedDemo } from './seed.ts'
 import { registerFixes, type FixDeps } from './fixes.ts'
 import { chatFor, defaultProvider, type ProviderStatus } from './llm.ts'
 
@@ -9,6 +10,14 @@ import { chatFor, defaultProvider, type ProviderStatus } from './llm.ts'
 export const extend = (app: Hono, ctx: AppContext, deps: FixDeps = {}): void => {
   registerFixes(app, ctx, deps)
   registerDrains(app, ctx)
+  // The sidebar's demo switch: the demo workspace, made on first use. Seeding again would only
+  // repeat the same events, so an existing demo is returned as it is.
+  app.post('/api/demo', async (c) => {
+    const existing = ctx.store.workspaces().find((w) => w.name === 'Ledgerly (demo)')
+    if (existing) return c.json(existing)
+    const { workspace } = await seedDemo(ctx.store, ctx.config.secret, ctx.now())
+    return c.json(workspace, 201)
+  })
   registerIntentLabels(app, ctx, deps)
 }
 

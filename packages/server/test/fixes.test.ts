@@ -52,7 +52,7 @@ test('fixes list and detail carry the evidence', async () => {
   await send(traffic())
   const list = await get('/api/fixes?days=7')
   const auth = list.body.fixes.find((f: any) => f.key === AUTH_KEY)
-  expect(auth).toMatchObject({ sessionsLost: 3, sourcePage: '/docs/api-keys', beforeStep: 'first_api_call' })
+  expect(auth).toMatchObject({ sessionsLost: 3, sourcePage: '/docs/api-keys', beforeStep: 'first_payment' })
   const detail = await get(`/api/fixes/${encodeURIComponent(AUTH_KEY)}?days=7`)
   expect(detail.body.sessions).toHaveLength(3)
   expect(detail.body.runSummary).toEqual({ before: { runs: 0, converted: 0 }, after: { runs: 0, converted: 0 } })

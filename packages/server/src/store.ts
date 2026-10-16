@@ -43,7 +43,7 @@ export type FixRecord = {
   readonly key: string
   status: FixStatus
   /** `servePath` is the URL path the SDK serves `after` at, to agents, once the fix is published. */
-  draft?: { file: string; servePath?: string; title?: string; before?: string; after: string; summary: string; provider: string }
+  draft?: { file: string; servePath?: string; title?: string; problem?: string; cause?: string; before?: string; after: string; summary: string; provider: string }
   drafting?: boolean
   draftError?: string
   prUrl?: string

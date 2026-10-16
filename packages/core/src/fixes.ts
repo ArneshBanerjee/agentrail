@@ -15,6 +15,12 @@ export type FixCandidate = {
   readonly action: string
   /** What is wrong: "Agents fail auth: X-Api-Key rejected". */
   readonly title: string
+  /** What is wrong with the page, for a heading: "Wrong auth header in the API keys guide". */
+  readonly problem: string
+  /** What agents did, after the number: "failed at their first API call". */
+  readonly failedAt: string
+  /** Why, after the page: "its authentication sample does not work". A drafted fix says it better. */
+  readonly cause: string
   readonly detail: string
   readonly path?: string
   readonly tool?: string
@@ -116,6 +122,7 @@ export const rankFixes = (sessions: readonly Session[], options: RankOptions): F
       kind: b.kind,
       action: actionFor(b, sourcePage, target),
       title: TITLES[b.kind](b),
+      ...wordsFor(b, sourcePage),
       detail: b.detail,
       ...(b.path ? { path: b.path } : {}),
       ...(b.tool ? { tool: b.tool } : {}),
@@ -152,6 +159,27 @@ export const pageName = (path: string) => {
   const last = path.split('/').filter(Boolean).at(-1)
   const words = last?.replace(/\.(md|mdx|html)$/, '').split(/[-_]+/).map((w) => (/^(api|sdk|cli|mcp|url|id|oauth)$/i.test(w) ? w.toUpperCase().replace('OAUTH', 'OAuth') : w))
   return words ? `the ${words.join(' ')} guide` : 'the docs'
+}
+
+/** The words a person reads about a problem, so the dialog states it the same way every time. */
+const wordsFor = (b: Blocker, sourcePage: string | undefined): { problem: string; failedAt: string; cause: string } => {
+  const page = sourcePage ? pageName(sourcePage) : 'the docs'
+  switch (b.kind) {
+    case 'failed_call':
+      return b.status === 401 || b.status === 403
+        ? { problem: `Wrong auth example in ${page}`, failedAt: b.firstCall ? 'failed at their first API call' : 'failed at an API call', cause: 'its authentication sample is not what the API accepts' }
+        : { problem: `Broken ${b.path ?? 'API'} example in ${page}`, failedAt: b.firstCall ? 'failed at their first API call' : 'failed at an API call', cause: `its example for ${b.path ?? 'the call'} fails with ${b.status ?? 'an error'}` }
+    case 'not_found':
+      return { problem: `Agents guess ${b.path}, which does not exist`, failedAt: 'hit a page that does not exist', cause: 'agents expect a page here' }
+    case 'markdown_served_html':
+      return { problem: `${b.path} has no markdown for agents`, failedAt: 'asked for markdown and got HTML', cause: 'it answers markdown requests with HTML' }
+    case 'mcp_tool_error':
+      return { problem: `The ${b.tool} tool does not say what it needs`, failedAt: `failed on the ${b.tool} MCP tool`, cause: 'its description and schema leave out what the tool needs' }
+    case 'payment_failed':
+      return { problem: 'Test mode and test cards are not documented', failedAt: 'had a payment declined', cause: 'agents use a real card in test mode' }
+    case 'human_signin':
+      return { problem: 'Sign-in needs a person agents cannot reach', failedAt: 'waited for a sign-in nobody approved', cause: 'sign-in waits for a person to approve it' }
+  }
 }
 
 const whereOf = (b: Blocker, sourcePage: string | undefined) =>

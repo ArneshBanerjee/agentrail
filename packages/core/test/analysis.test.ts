@@ -77,8 +77,8 @@ test('fixes are ranked by the revenue they put at risk, with the observed count 
     kind: 'failed_call',
     title: 'Agents fail auth on /v1/meters',
     sessionsLost: 3,
-    // They stopped before the first API call, and every session that got past it paid.
-    beforeStep: 'first_api_call',
+    // They stopped before the first payment, and every session that got past it paid.
+    beforeStep: 'first_payment',
     conversionPast: 1,
     revenuePerConversion: 6000,
     monthlyValueAtRisk: 18000,

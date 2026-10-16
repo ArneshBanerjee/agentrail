@@ -8,7 +8,7 @@ export type Me = { workspaces: { id: string; name: string }[]; workspaceId: stri
 export type FixRecord = {
   key: string
   status: 'open' | 'drafted' | 'testing' | 'published' | 'dismissed'
-  draft?: { file: string; servePath?: string; title?: string; before?: string; after: string; summary: string; provider: string }
+  draft?: { file: string; servePath?: string; title?: string; problem?: string; cause?: string; before?: string; after: string; summary: string; provider: string }
   drafting?: boolean
   draftError?: string
   prUrl?: string

@@ -30,11 +30,13 @@ export const FixDialog = ({ fixKey, onClose, onPublished }: { fixKey: string; on
   const f = fix.data
   const steps = summary.data?.funnelSteps ?? []
   const label = (id?: string) => lowerFirst(steps.find((s) => s.id === id)?.label ?? id ?? '')
-  const next = f?.beforeStep ? steps[steps.findIndex((s) => s.id === f.beforeStep) + 1] : undefined
   const change = record?.draft ?? (f?.proposal.patch ? { file: f.proposal.patch.file, after: f.proposal.patch.content, summary: f.proposal.summary, provider: 'rule' } : undefined)
   const published = record?.status === 'published'
   const servePath = record?.draft?.servePath ?? f?.path
   const provider = providers.data?.available.find((p) => p.id === providers.data?.selected)
+  // The page the fix changes: the page agents read before failing, or the missing page itself.
+  const where = f ? (f.kind === 'failed_call' ? f.sourcePage : f.kind === 'not_found' || f.kind === 'markdown_served_html' ? f.path : undefined) : undefined
+  const cause = record?.draft?.cause ?? f?.cause ?? ''
 
   const confirm = async () => {
     setBusy(true)
@@ -57,28 +59,38 @@ export const FixDialog = ({ fixKey, onClose, onPublished }: { fixKey: string; on
         <header>
           <div>
             <h2>{record?.draft?.title ?? f?.action ?? 'Loading…'}</h2>
-            <div className="muted small">{f?.title}</div>
+            <div className="muted small">{record?.draft?.problem ?? f?.problem}</div>
           </div>
           <button className="x" aria-label="Close" onClick={onClose}>
             ×
           </button>
         </header>
         <div className="body">
-          {f && f.sessionsLost === 0 ? (
+          {f ? (
             <p style={{ marginTop: 6 }}>
-              <b>{fmt.n(f.sessionsAffected)} {f.sessionsAffected === 1 ? 'agent' : 'agents'}</b> hit this and got past it with extra calls. {record?.draft?.summary ?? f.proposal.summary}
-            </p>
-          ) : f ? (
-            <p style={{ marginTop: 6 }}>
-              <b>{fmt.n(f.sessionsLost)} agents</b> {f.kind === 'failed_call' ? 'failed at their' : 'stopped before'} {f.beforeStep ? label(f.beforeStep) : 'the next step'}.{' '}
-              {f.dropShare > 0 ? (
+              {f.sessionsLost > 0 ? (
                 <>
-                  <b>{fmt.pct(f.dropShare, 0)}</b> of the drop before {next ? label(next.id) : label(f.beforeStep)} comes from {f.sourcePage || f.path ? 'one page, ' : 'this problem'}
-                  {f.sourcePage || f.path ? <span className="mono">{f.kind === 'failed_call' ? f.sourcePage : f.path}</span> : null}
-                  {record?.draft?.summary ? `: ${lowerFirst(record.draft.summary)}` : '.'}
+                  <b>{fmt.n(f.sessionsLost)} agents</b> {f.failedAt}.{' '}
+                  {f.dropShare > 0 && f.beforeStep ? (
+                    <>
+                      <b>{fmt.pct(f.dropShare, 0)}</b> of the drop before the {label(f.beforeStep)} comes from{' '}
+                      {where ? (
+                        <>
+                          one page, <span className="mono">{where}</span>: {cause}.
+                        </>
+                      ) : (
+                        <>this problem: {cause}.</>
+                      )}
+                    </>
+                  ) : (
+                    <>{where ? <>The cause is <span className="mono">{where}</span>: {cause}.</> : <>The cause: {cause}.</>}</>
+                  )}
                 </>
               ) : (
-                record?.draft?.summary
+                <>
+                  <b>{fmt.n(f.sessionsAffected)} {f.sessionsAffected === 1 ? 'agent' : 'agents'}</b> {f.failedAt} and got past it with extra calls.{' '}
+                  {where ? <>It comes from <span className="mono">{where}</span>: {cause}.</> : <>The cause: {cause}.</>}
+                </>
               )}
             </p>
           ) : null}

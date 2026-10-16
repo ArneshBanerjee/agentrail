@@ -36,8 +36,8 @@ export type FunnelStep = {
 
 /**
  * Every step can be reached by a `track()` call, and most can also be seen in plain HTTP: a package
- * download, a device sign-in that succeeds, a first call to a versioned API. A product with only the
- * middleware still gets a funnel.
+ * download, a device sign-in that succeeds. A product with only the middleware still gets a funnel.
+ * A workspace that wants a "First API call" column adds it in Settings.
  */
 export const DEFAULT_FUNNEL: readonly FunnelStep[] = [
   { id: 'discovered', label: 'Discovered', phase: 'Discovery', match: [{ any: true }] },
@@ -57,12 +57,6 @@ export const DEFAULT_FUNNEL: readonly FunnelStep[] = [
     label: 'Signed in',
     phase: 'Sign-in',
     match: [{ step: 'signed_in' }, { kind: 'request', method: 'POST', ok: true, pathPattern: '/(device/(poll|token)|oauth/token|login)$' }],
-  },
-  {
-    id: 'first_api_call',
-    label: 'First API call',
-    phase: 'First API call',
-    match: [{ step: 'first_api_call' }, { kind: 'request', ok: true, pathPattern: '^/v\\d+/' }],
   },
   { id: 'first_payment', label: 'First payment', phase: 'First payment', match: [{ nthPayment: 1 }] },
   { id: 'second_payment', label: 'Second payment', phase: 'Second payment', match: [{ nthPayment: 2 }] },

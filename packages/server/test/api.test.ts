@@ -46,7 +46,7 @@ test('the summary shows the journey, its funnel, intent and the fix it needs', a
   await send(codexJourney)
   const { body } = await get('/api/summary?days=7')
   expect(body.overview).toMatchObject({ sessions: 1, live: 1, withIntent: 1 })
-  expect(body.funnel.map((r: any) => r.sessions)).toEqual([1, 1, 1, 0, 0, 0, 0])
+  expect(body.funnel.map((r: any) => r.sessions)).toEqual([1, 1, 1, 0, 0, 0])
   expect(body.agents[0]).toMatchObject({ label: 'Codex', sessions: 1 })
   expect(body.fixes[0]).toMatchObject({ kind: 'failed_call', sessionsLost: 1, title: 'Agents fail auth: X-Api-Key rejected', sourcePage: '/docs/billing/usage' })
 })
@@ -69,7 +69,7 @@ test('sessions list and a session timeline', async () => {
   expect(detail.body.timeline[3].marks).toEqual([{ kind: 'step', label: 'Installed' }])
   // Still live, so it has not stopped yet.
   expect(detail.body.timeline[5].marks.map((m: any) => m.kind)).toEqual(['blocked'])
-  expect(detail.body).toMatchObject({ gotTo: { id: 'signed_in' }, stoppedAtLabel: 'First API call', failedCalls: { failed: 1, of: 1 } })
+  expect(detail.body).toMatchObject({ gotTo: { id: 'signed_in' }, stoppedAtLabel: 'First payment', failedCalls: { failed: 1, of: 1 } })
 })
 
 test('settings never return secrets, and a masked value keeps the stored one', async () => {
@@ -112,4 +112,14 @@ test('an exact from and to window wins over days', async () => {
   await send(codexJourney)
   expect((await get(`/api/summary?from=${T0 - 1000}&to=${T0 + 100_000}`)).body.overview.sessions).toBe(1)
   expect((await get(`/api/summary?from=${T0 + 10_000}&to=${T0 + 100_000}`)).body.overview.sessions).toBe(0)
+})
+
+test('the demo switch makes the demo workspace once', async () => {
+  const { extend } = await import('../src/features.ts')
+  const { app, store } = setup({ extend: (a, c) => extend(a, c) })
+  const first = await app.request('/api/demo', { method: 'POST' })
+  expect(first.status).toBe(201)
+  const again = await app.request('/api/demo', { method: 'POST' })
+  expect(again.status).toBe(200)
+  expect(store.workspaces().filter((w) => w.name === 'Ledgerly (demo)')).toHaveLength(1)
 })

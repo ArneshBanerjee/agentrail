@@ -25,8 +25,15 @@ export const DRAFT_SCHEMA = {
   name: 'draft',
   schema: {
     type: 'object',
-    properties: { file: { type: 'string' }, title: { type: 'string' }, summary: { type: 'string' }, content: { type: 'string' } },
-    required: ['file', 'title', 'summary', 'content'],
+    properties: {
+      file: { type: 'string' },
+      title: { type: 'string' },
+      problem: { type: 'string' },
+      cause: { type: 'string' },
+      summary: { type: 'string' },
+      content: { type: 'string' },
+    },
+    required: ['file', 'title', 'problem', 'cause', 'summary', 'content'],
     additionalProperties: false,
   },
 }
@@ -36,7 +43,9 @@ export const DRAFT_SCHEMA = {
  * The rest is for a model that wraps it anyway. A drafted page holds its own code fences, so a
  * fence is only a last resort.
  */
-export const parseDraft = (text: string): { file?: string; title?: string; summary?: string; content?: string } | undefined => {
+type ParsedDraft = { file?: string; title?: string; problem?: string; cause?: string; summary?: string; content?: string }
+
+export const parseDraft = (text: string): ParsedDraft | undefined => {
   const fenced = /^\s*```(?:json)?\s*([\s\S]*)```\s*$/.exec(text)?.[1]
   for (const candidate of [text, fenced]) {
     if (!candidate) continue
@@ -44,7 +53,7 @@ export const parseDraft = (text: string): { file?: string; title?: string; summa
     const end = candidate.lastIndexOf('}')
     if (start < 0 || end < start) continue
     try {
-      return JSON.parse(candidate.slice(start, end + 1)) as { file?: string; title?: string; summary?: string; content?: string }
+      return JSON.parse(candidate.slice(start, end + 1)) as ParsedDraft
     } catch {
       // Try the next candidate.
     }
@@ -56,7 +65,13 @@ const DRAFT_SYSTEM = `You fix documentation and product surfaces so AI agents ca
 You get one problem that stopped agents, with evidence from their sessions, and the current source of the page they read.
 Change only what fixes the problem. Keep the author's style, structure and wording everywhere else.
 Never invent API behaviour that the evidence does not support. If the evidence is not enough, make the smallest safe change and say so in the summary.
-Reply with one JSON object only: {"file": "<path>", "title": "<what the change does, as an instruction, such as 'Fix the authentication sample in the API keys guide'>", "summary": "<one sentence for a reviewer>", "content": "<the complete new file>"}`
+Reply with one JSON object only:
+{"file": "<path>",
+ "title": "<what the change does, as an instruction, such as 'Fix the authentication sample in the API keys guide'>",
+ "problem": "<what is wrong with the page, short, such as 'Wrong auth header in the API keys guide'>",
+ "cause": "<a clause about the page that finishes 'comes from one page, /docs/x:', such as 'its authentication sample shows the wrong header'>",
+ "summary": "<one sentence for a reviewer>",
+ "content": "<the complete new file>"}`
 
 export const draftPrompt = (fix: FixCandidate, sessions: readonly Session[], source: { path: string; content: string } | undefined) => {
   const evidence = sessions.slice(0, 5).map((s) => {
@@ -219,6 +234,8 @@ export const registerFixes = (app: Hono, ctx: AppContext, deps: FixDeps = {}) =>
           file: source?.path ?? parsed.file ?? `${(found.fix.sourcePage ?? 'docs/agent-fix').replace(/^\//, '')}.md`,
           ...(servePath ? { servePath } : {}),
           ...(parsed.title ? { title: parsed.title } : {}),
+          ...(parsed.problem ? { problem: parsed.problem } : {}),
+          ...(parsed.cause ? { cause: parsed.cause.replace(/\.$/, '') } : {}),
           ...(source ? { before: source.content } : {}),
           after: parsed.content,
           summary: parsed.summary ?? found.fix.proposal.summary,

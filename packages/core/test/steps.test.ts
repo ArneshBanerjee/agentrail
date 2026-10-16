@@ -22,7 +22,7 @@ test('requests get plain names from rules and from their shape', () => {
   expect(stepName(req('POST', '/api/device/poll', 428))).toBe('poll')
   expect(stepName(req('POST', '/v1/subscriptions'))).toBe('subscription created')
   expect(stepName(req('POST', '/v1/billing/meter_events'))).toBe('meter event')
-  expect(stepName(req('GET', '/v1/billing/meters/mtr_8Yx2/event_summaries'))).toBe('event summary read')
+  expect(stepName(req('GET', '/v1/billing/meters/mtr_8Yx2/event_summaries'))).toBe('usage read')
   expect(stepName(req('POST', '/v1/webhook_endpoints', 400))).toBe('webhook refused')
   expect(stepName(req('POST', '/v1/meters', 401))).toBe('unauthorized')
   expect(stepName(req('GET', '/docs/nope', 404))).toBe('not found')
@@ -55,11 +55,11 @@ const demoSession = (): StoredEvent[] => {
   ]
 }
 
-test('a journey made only of HTTP reaches Installed, Signed in and First API call', () => {
+test('a journey made only of HTTP reaches Installed and Signed in', () => {
   const [s] = buildSessions(demoSession())
   expect(s!.agent).toMatchObject({ name: 'Claude Code', version: '2.1.288' })
   expect(s!.discovery.via).toBe('docs finder')
-  expect(Object.keys(s!.reached)).toEqual(['discovered', 'installed', 'signed_in', 'first_api_call'])
+  expect(Object.keys(s!.reached)).toEqual(['discovered', 'installed', 'signed_in'])
   expect(s!.stoppedAt).toBe('first_payment')
 })
 
@@ -77,14 +77,14 @@ test('the timeline groups by phase, counts polls and says how the session ended'
     ['Sign-in', 'poll 1 / 3'],
     ['Sign-in', 'poll 2 / 3'],
     ['Sign-in', 'poll 3 / 3'],
-    ['First API call', 'subscription created'],
+    ['First payment', 'subscription created'],
     ['First payment', 'meter event'],
-    ['First payment', 'event summary read'],
+    ['First payment', 'usage read'],
     ['First payment', 'session ended'],
   ])
   expect(items[9]!.detail).toBe('POST /api/device/poll 200')
   expect(items.at(-1)!.detail).toBe('Stopped before first payment')
-  expect(timeline(s!, DEFAULT_FUNNEL, { live: true }).at(-1)!.name).toBe('event summary read')
+  expect(timeline(s!, DEFAULT_FUNNEL, { live: true }).at(-1)!.name).toBe('usage read')
 })
 
 test('MCP connected is its own column and never where a journey stopped', () => {
@@ -104,7 +104,14 @@ test('a fix says what to do and what share of the drop it explains', () => {
     ]),
   )
   const [auth] = rankFixes(sessions, { windowMs: 30 * 86_400_000 })
-  expect(auth).toMatchObject({ action: 'Fix the authentication sample in the API keys guide', sessionsLost: 3, beforeStep: 'first_api_call', dropShare: 0.75 })
+  expect(auth).toMatchObject({
+    action: 'Fix the authentication sample in the API keys guide',
+    problem: 'Wrong auth example in the API keys guide',
+    failedAt: 'failed at their first API call',
+    sessionsLost: 3,
+    beforeStep: 'first_payment',
+    dropShare: 0.75,
+  })
 })
 
 test('a pending sign-in poll is waiting, not failing, and downloads are not pages', () => {

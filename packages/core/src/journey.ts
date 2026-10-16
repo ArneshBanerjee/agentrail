@@ -30,6 +30,8 @@ export type Blocker = {
   readonly tool?: string
   /** The last page the agent read before this happened. Usually the page a fix must edit. */
   readonly after?: string
+  /** For a failed call: no call to the API had worked yet in this session. */
+  readonly firstCall?: boolean
 }
 
 export type Discovery = {
@@ -251,6 +253,7 @@ export const findBlockers = (events: readonly StoredEvent[]): Blocker[] => {
   const blockers: Blocker[] = []
   const signinStarted: StoredEvent[] = []
   let lastRead: string | undefined
+  let apiWorked = false
   const push = (b: Blocker) => blockers.push(lastRead ? { ...b, after: lastRead } : b)
   for (const e of events) {
     const path = e.path ? normalizePath(e.path) : undefined
@@ -268,6 +271,7 @@ export const findBlockers = (events: readonly StoredEvent[]): Blocker[] => {
         const auth = (e.status === 401 || e.status === 403) && e.error
         push({
           kind: 'failed_call',
+          firstCall: !apiWorked,
           key: auth ? `failed_call:auth:${e.status}:${e.error}` : `failed_call:${method} ${path}:${e.status}`,
           at: e.ts,
           eventId: e.id,
@@ -296,6 +300,7 @@ export const findBlockers = (events: readonly StoredEvent[]): Blocker[] => {
     // A device sign-in is visible in HTTP alone: started, then a poll or token call that succeeds.
     const ok = (e.status ?? 200) < 400
     if ((e.kind === 'step' && e.step === 'signin_started') || (e.kind === 'request' && ok && /\/device\/(start|code)$/.test(e.path ?? ''))) signinStarted.push(e)
+    if (e.kind === 'request' && ok && looksLikeApi(e.path ?? '', e.host) && !/\/(device|cli|oauth|docs)\//.test(e.path ?? '')) apiWorked = true
     // The page an agent last read, for a fix to edit. Downloads and API reads are not pages.
     if (e.kind === 'request' && (e.method ?? 'GET') === 'GET' && ok && path && !looksLikeApi(e.path ?? '', e.host) && !isDownload(e.path ?? '')) lastRead = path
     if ((e.kind === 'step' && e.step === 'signed_in') || (e.kind === 'request' && ok && e.method === 'POST' && /\/(device\/(poll|token)|oauth\/token)$/.test(e.path ?? ''))) signinStarted.length = 0
