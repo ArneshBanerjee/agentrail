@@ -100,3 +100,9 @@ test('arrivals are pushed live for agents only', async () => {
   ])
   expect(seen).toEqual(['Codex:request'])
 })
+
+test('fix drafting and the session gap are workspace settings', async () => {
+  const { app, store, workspace } = setup()
+  await app.request('/api/settings', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ autoDraft: false, sessionGapMinutes: 5 }) })
+  expect(store.settings(workspace.id)).toMatchObject({ autoDraft: false, sessionGapMinutes: 5 })
+})

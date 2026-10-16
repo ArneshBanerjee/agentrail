@@ -16,9 +16,10 @@
     "typecheck": "tsc -p packages/core && tsc -p packages/sdk && tsc -p packages/server && tsc -p packages/web && tsc -p examples/ledgerly",
     "test": "vitest run",
     "dev": "node scripts/dev.mjs",
-    "build": "npm run build -w @agentrail/web",
-    "start": "node packages/server/src/main.ts",
-    "seed": "node packages/server/src/seed.ts"
+    "build": "npm run build -w @agentrail/core && npm run build -w @agentrail/sdk && npm run build -w @agentrail/web",
+    "start": "node --conditions=source packages/server/src/main.ts",
+    "seed": "node --conditions=source packages/server/src/seed.ts",
+    "example": "node --conditions=source examples/ledgerly/server.ts"
   },
   "engines": {
     "node": ">=22.18"

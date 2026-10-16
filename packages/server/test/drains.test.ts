@@ -85,7 +85,7 @@ test('the import-log CLI sends only agent lines to a running server', async () =
       'not a log line',
     ].join('\n'),
   )
-  const { stdout: out } = await promisify(execFile)(process.execPath, [join(import.meta.dirname, '../../sdk/src/cli.ts'), 'import-log', file, '--key', site.ingestKey, '--endpoint', `http://127.0.0.1:${port}`, '--host', 'docs.x.test'])
+  const { stdout: out } = await promisify(execFile)(process.execPath, ['--conditions=source', join(import.meta.dirname, '../../sdk/src/cli.ts'), 'import-log', file, '--key', site.ingestKey, '--endpoint', `http://127.0.0.1:${port}`, '--host', 'docs.x.test'])
   server.close()
   expect(out.trim()).toBe('3 lines read, 1 from agents, 1 new events stored.')
   expect(store.events([site.id], 0, Infinity)[0]).toMatchObject({ path: '/llms.txt', host: 'docs.x.test', source: 'drain' })

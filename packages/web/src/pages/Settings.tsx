@@ -12,6 +12,8 @@ type Settings = {
   github: { repo?: string; token?: string; branch?: string; docsRoot?: string }
   stripe: { webhookSecret?: string }
   runner?: { targetUrl?: string; timeoutSec?: number }
+  autoDraft?: boolean
+  sessionGapMinutes?: number
 }
 
 const Saved = ({ at }: { at?: number }) => (at ? <span className="up small">Saved</span> : null)
@@ -170,6 +172,25 @@ export const Settings = () => {
         <p className="muted small">Without GitHub, publishing marks the fix as shipped, so the before and after comparison starts.</p>
         <button className="btn primary" onClick={() => save('github', { github: draft.github })}>
           Save GitHub settings
+        </button>
+      </div>
+
+      <div className="card" id="behaviour">
+        <h2>
+          Fixes and sessions <Saved at={saved.behaviour} />
+        </h2>
+        <label className="row-flex" style={{ cursor: 'pointer' }}>
+          <input type="checkbox" checked={draft.autoDraft !== false} onChange={(e) => setDraft({ ...draft, autoDraft: e.target.checked })} />
+          <span>Prepare the top fixes in the background with the selected model</span>
+        </label>
+        <p className="muted small">On, a fix is already drafted when you open it. With Claude Code this uses your Claude plan, one draft at a time.</p>
+        <label className="field" style={{ maxWidth: 260 }}>
+          Minutes of quiet that end a session
+          <input type="number" min={1} max={240} value={draft.sessionGapMinutes ?? 30} onChange={(e) => setDraft({ ...draft, sessionGapMinutes: Number(e.target.value) })} />
+        </label>
+        <p />
+        <button className="btn primary" onClick={() => save('behaviour', { autoDraft: draft.autoDraft !== false, sessionGapMinutes: draft.sessionGapMinutes ?? 30 })}>
+          Save
         </button>
       </div>
 

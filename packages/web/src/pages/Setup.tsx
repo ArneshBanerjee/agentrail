@@ -57,7 +57,7 @@ ${endpoint.replace('/v1/events', '')}/v1/drains/vercel/${key}
 ${endpoint.replace('/v1/events', '')}/v1/drains/cloudflare/${key}
 
 # nginx or Apache combined logs, from any machine:
-npx @agentrail/sdk import-log access.log --key ${key} --endpoint ${endpoint.replace('/v1/events', '')} --host docs.example.com`,
+npx -p @agentrail/sdk agentrail import-log access.log --key ${key} --endpoint ${endpoint.replace('/v1/events', '')} --host docs.example.com`,
 })
 
 export const Setup = () => {
