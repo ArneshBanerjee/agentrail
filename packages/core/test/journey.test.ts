@@ -138,3 +138,8 @@ test('a payment for an account made in a test run joins that run, not real traff
   expect(sessions).toHaveLength(2)
   expect(sessions.find((x) => x.runId)).toMatchObject({ runId: 'run-9', payments: 1 })
 })
+
+test('a missing page is not also a markdown problem', () => {
+  const [j] = buildSessions([ev({ kind: 'request', ts: s(0), path: '/docs/nope', status: 404, accept: 'text/markdown', contentType: 'text/html', userAgent: CODEX, ipHash: 'ip-m' })])
+  expect(j!.blockers.map((b) => b.kind)).toEqual(['not_found'])
+})

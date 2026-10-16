@@ -14,7 +14,7 @@ const run = (name, command, args) => {
 }
 
 const children = [
-  run('server', process.execPath, ['--conditions=source', '--watch', 'packages/server/src/main.ts']),
+  run('server', process.execPath, ['--env-file-if-exists=.env', '--conditions=source', '--watch', 'packages/server/src/main.ts']),
   run('web', 'npm', ['run', 'dev', '-w', '@agentrail/web']),
 ]
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => children.forEach((c) => c.kill(signal)))

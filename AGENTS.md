@@ -6,9 +6,11 @@ what to fix. The full plan is in `docs/PLAN.md`.
 ## Commands
 
 ```
+npm start       # build the dashboard and run the server on :4318
 npm run check   # typecheck and all tests. Must pass before every pull request.
-npm run dev     # server on :4318 and dashboard on :5173
+npm run dev     # server on :4318 and dashboard on :5173, with hot reload
 npm run seed    # fill a demo workspace with sample data
+npm run pack    # build the SDK packages into packages-dist/
 ```
 
 ## Rules

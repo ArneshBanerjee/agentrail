@@ -87,7 +87,12 @@ export const Setup = () => {
             </select>
           </label>
         ) : null}
-        <pre className="code">npm install @agentrail/sdk</pre>
+        <p className="small muted" style={{ marginBottom: 0 }}>
+          1. In your Agentrail folder, build the SDK. 2. Install it in your product.
+        </p>
+        <pre className="code">{`npm run pack
+cd /path/to/your-product
+npm install /path/to/agentrail/packages-dist/agentrail-core-0.1.0.tgz /path/to/agentrail/packages-dist/agentrail-sdk-0.1.0.tgz`}</pre>
       </div>
       <div className="card section">
         <div className="tabs" style={{ flexWrap: 'wrap' }}>

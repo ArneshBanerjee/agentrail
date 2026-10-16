@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { AgentName, Change, ColumnFunnel, Empty, ErrorBox, LabelChip, Link, Loading, Stat } from '../components.tsx'
 import { FixDialog } from '../dialog.tsx'
-import { fmt, lowerFirst, navigate, useApi, useDays, useLive } from '../lib.ts'
+import { api, fmt, lowerFirst, navigate, session, useApi, useDays, useLive } from '../lib.ts'
 import type { SessionSummary, Summary } from '../types.ts'
 
 export const Overview = () => {
@@ -31,7 +31,19 @@ export const Overview = () => {
               Set up a collector
             </Link>
           </p>
-          <p className="small faint">To look around first, run npm run seed for a demo workspace.</p>
+          <p className="small muted">Or look around first with a month of sample traffic.</p>
+          <p className="row-flex" style={{ justifyContent: 'center' }}>
+            <button
+              className="btn"
+              onClick={async () => {
+                const demo = await api<{ id: string }>('/api/demo', { method: 'POST' })
+                session.setWorkspace(demo.id)
+                window.location.href = '/'
+              }}
+            >
+              Open the demo
+            </button>
+          </p>
         </Empty>
       </div>
     )

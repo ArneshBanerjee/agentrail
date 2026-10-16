@@ -17,9 +17,10 @@
     "test": "vitest run",
     "dev": "node scripts/dev.mjs",
     "build": "npm run build -w @agentrail/core && npm run build -w @agentrail/sdk && npm run build -w @agentrail/web",
-    "start": "node --conditions=source packages/server/src/main.ts",
+    "start": "npm run build -w @agentrail/web --silent -- --logLevel error && node --env-file-if-exists=.env --conditions=source packages/server/src/main.ts",
     "seed": "node --conditions=source packages/server/src/seed.ts",
-    "example": "node --conditions=source examples/ledgerly/server.ts"
+    "example": "node --env-file-if-exists=.env --conditions=source examples/ledgerly/server.ts",
+    "pack": "npm run build -w @agentrail/core -w @agentrail/sdk --silent && mkdir -p packages-dist && npm pack -w @agentrail/core -w @agentrail/sdk --pack-destination packages-dist --silent"
   },
   "engines": {
     "node": ">=22.18"

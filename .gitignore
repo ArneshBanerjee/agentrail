@@ -7,3 +7,4 @@ dist/
 *.sqlite
 *.sqlite-*
 data/
+packages-dist/

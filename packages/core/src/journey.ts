@@ -291,7 +291,9 @@ export const findBlockers = (events: readonly StoredEvent[]): Blocker[] => {
     if (
       e.kind === 'request' &&
       e.accept && /text\/(?:x-)?markdown/i.test(e.accept) && !/text\/html/i.test(e.accept.split(',')[0] ?? '') &&
-      e.contentType && /text\/html/i.test(e.contentType)
+      e.contentType && /text\/html/i.test(e.contentType) &&
+      // A missing page is its own problem, not a markdown one.
+      (e.status ?? 200) < 400
     ) {
       push({ kind: 'markdown_served_html', key: `markdown_served_html:${path}`, at: e.ts, eventId: e.id, detail: `Asked for markdown at ${path} and got HTML`, ...(path ? { path } : {}) })
     }

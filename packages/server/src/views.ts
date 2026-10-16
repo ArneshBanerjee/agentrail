@@ -51,7 +51,8 @@ export const sessionDetail = (s: Session, funnel: readonly FunnelStep[], now: nu
     blockerList: s.blockers,
     timeline: items,
     gotTo: lastStep ? { id: lastStep.id, label: lastStep.label } : undefined,
-    stoppedAtLabel: funnel.find((f) => f.id === s.stoppedAt)?.label,
+    // A session that converted is complete, even if it never reached a later step such as a renewal.
+    stoppedAtLabel: conversionStep in s.reached ? undefined : funnel.find((f) => f.id === s.stoppedAt)?.label,
     failedCalls: { failed: failed.length, of: calls.length },
   }
 }

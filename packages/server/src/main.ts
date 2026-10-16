@@ -12,7 +12,10 @@ const { site, created } = store.ensureDefaults(Date.now())
 const { app } = createApp({ store, config, verify: verifier(), extend })
 
 serve({ fetch: app.fetch, port: config.port }, () => {
-  console.log(`Agentrail is running on ${config.publicUrl}`)
-  if (created) console.log(`Created a workspace. Ingest key for "${site.name}": ${site.ingestKey}`)
-  if (!config.adminToken) console.log('AGENTRAIL_ADMIN_TOKEN is not set, so the dashboard is open to anyone who can reach this port.')
+  console.log(`\nAgentrail is running. Open ${config.publicUrl}\n`)
+  if (created) {
+    console.log(`First run: created the workspace "My product". Its ingest key is ${site.ingestKey}`)
+    console.log('To look around with sample data, turn on "Demo" at the bottom of the sidebar.\n')
+  }
+  if (!config.adminToken) console.log('Note: AGENTRAIL_ADMIN_TOKEN is not set, so anyone who can reach this port can open the dashboard.\n')
 })
