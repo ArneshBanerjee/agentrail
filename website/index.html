@@ -43,6 +43,10 @@
       a { color: inherit; text-decoration: none; }
       .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
 
+      .madeby { border-bottom: 1px solid var(--line); background: var(--panel); font-size: 13.5px; color: var(--muted); }
+      .madeby .wrap { display: flex; justify-content: center; align-items: center; gap: 8px; height: 38px; }
+      .madeby a { color: var(--text); font-weight: 600; border-bottom: 1px solid var(--line); transition: border-color 0.15s, color 0.15s; }
+      .madeby a:hover { color: var(--accent); border-color: var(--accent); }
       nav { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
       nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 60px; }
       .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 17px; }
@@ -104,6 +108,9 @@
     </style>
   </head>
   <body>
+    <div class="madeby">
+      <div class="wrap">Made by <a href="https://arneshbanerjee.dev" target="_blank" rel="noopener">Arnesh Banerjee</a> · <a href="https://arneshbanerjee.dev" target="_blank" rel="noopener">arneshbanerjee.dev</a></div>
+    </div>
     <nav>
       <div class="wrap">
         <a class="brand" href="/"><img src="/favicon.svg" alt="" /> Agentrail</a>
