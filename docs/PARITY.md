@@ -61,6 +61,6 @@ says how it was checked:
 | Live API keys | Anthropic, OpenAI and Gemini were tested with stubbed transports, not real keys |
 | GitHub, Stripe, Vercel, Cloudflare | Tested with recorded shapes, not live accounts |
 | Web Bot Auth | Tested with the RFC 9421 test key, not a real signing agent |
-| Docker | Built and run on 2026-10-16 (OrbStack, arm64): health check, admin token, dashboard, demo data, and data kept across a restart. The image is 587 MB with build tools still in it |
+| Docker | Built and run on 2026-10-16 (OrbStack, arm64): health check, admin token, dashboard, demo data, and data kept across a restart. The image is 484 MB, with no build tools in it |
 | npm | The packages build and install from a tarball, but are not published |
 | WebFetch on localhost | Claude Code uses curl for `localhost`, so a local test names it only if it follows the `llms.txt` note. On a public HTTPS site, WebFetch sends `Claude-User (claude-code/...)` |

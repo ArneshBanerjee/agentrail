@@ -210,8 +210,9 @@ is in [`docs/PARITY.md`](docs/PARITY.md).
 ## Limits
 
 - The packages are not on npm yet. `npm run build` and `npm pack` produce publishable packages.
-- The Docker image is 587 MB, because it still carries the build tools. It was built and run on
-  2026-10-16: the dashboard, the admin token and the data volume all worked.
+- The Docker image is 484 MB. Most of that is the Node base image; the server's own files and
+  run-time packages are about 121 MB. It was built and run on 2026-10-16: the dashboard, the admin
+  token and the data volume all worked.
 - On `localhost`, every client has the same address, so separate agents can join one session. Use a
   short session gap in Settings when you test locally.
 - Agents that run as a normal browser (ChatGPT Atlas, Comet) look like people, and are not counted.
