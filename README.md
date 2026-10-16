@@ -14,7 +14,7 @@ server and shows you:
 - conversion and revenue by agent and by task;
 - the fixes that would help most, drafted for you, live after one click.
 
-Free, open source and self-hosted. Website: [openscope.vercel.app](https://openscope.vercel.app)
+Free, open source and self-hosted. Website: [openscope-oss.vercel.app](https://openscope-oss.vercel.app)
 
 ![Overview](docs/assets/overview.png)
 
