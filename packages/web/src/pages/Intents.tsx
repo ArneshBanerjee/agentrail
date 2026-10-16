@@ -12,7 +12,7 @@ export const Intents = () => {
     <>
       <div className="banner">
         <span>
-          <span className="bold">{fmt.n(data.withIntent)}</span> of {fmt.n(data.total)} sessions stated their task. Agents state a task through the intake endpoint, your MCP server, or{' '}
+          <span className="bold">{fmt.n(data.withIntent)}</span> of {fmt.n(data.total)} sessions stated their task. Agents state a task through the docs finder, your MCP server, or{' '}
           <span className="mono">intent()</span> in the SDK.
         </span>
         <Link to="/settings#intents" className="btn">
@@ -22,7 +22,7 @@ export const Intents = () => {
       {data.intents.length === 0 ? (
         <div className="card">
           <Empty title="No stated tasks yet">
-            <p>Add the intake line to your llms.txt so agents can say what they came to do.</p>
+            <p>Add the docs finder note to your llms.txt, and agents send their task when they look for the right page.</p>
             <Link to="/setup" className="btn">
               Show me how
             </Link>

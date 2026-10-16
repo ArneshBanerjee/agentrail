@@ -91,3 +91,12 @@ test('a missing page is matched to the page agents most likely wanted', () => {
   expect(closestPath('/docs/usage-billing', known)).toBe('/docs/billing/usage')
   expect(closestPath('/careers', known)).toBeUndefined()
 })
+
+test('a keyword group is named by the word as agents wrote it, the earliest shared one', () => {
+  const sessions = build(
+    session({ intent: 'set up usage-based billing: create a meter and check usage' }),
+    session({ intent: 'set up usage-based billing with meter events for our API' }),
+  )
+  const [group] = groupIntents(sessions)
+  expect(group).toMatchObject({ id: 'kw:usage', label: 'Usage', sessions: 2 })
+})
