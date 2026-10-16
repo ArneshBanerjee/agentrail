@@ -10,7 +10,7 @@ const LABELS = [
 
 export const Agents = () => {
   const [days] = useDays()
-  const { data, error } = useApi<{ agents: AgentRow[]; surfaces: BreakdownRow[] }>(`/api/agents?days=${days}`)
+  const { data, error } = useApi<{ agents: AgentRow[]; surfaces: BreakdownRow[]; currency: string }>(`/api/agents?days=${days}`)
   if (error) return <ErrorBox error={error} />
   if (!data) return <Loading />
   const total = data.agents.reduce((n, a) => n + a.sessions, 0)
@@ -78,7 +78,7 @@ export const Agents = () => {
                   <div className="faint small">{fmt.pct(a.sessions / Math.max(total, 1), 0)}</div>
                 </td>
                 <td className="num">{fmt.pct(a.conversion, 0)}</td>
-                <td className="num">{fmt.money(a.revenue)}</td>
+                <td className="num">{fmt.money(a.revenue, data.currency)}</td>
               </tr>
             ))}
           </tbody>

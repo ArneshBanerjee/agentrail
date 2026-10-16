@@ -59,8 +59,32 @@ export const Settings = () => {
     <div className="stack" style={{ gap: 16, maxWidth: 860 }}>
       {error ? <div className="banner warn">{error}</div> : null}
 
+      <div className="card" id="workspace">
+        <h2>
+          Workspace <Saved at={saved.workspace} />
+        </h2>
+        <div className="row-flex">
+          <input type="text" aria-label="Workspace name" defaultValue={me.data.workspaces.find((w) => w.id === me.data!.workspaceId)?.name} id="workspace-name" style={{ minWidth: 240 }} />
+          <button
+            className="btn"
+            onClick={async () => {
+              await api(`/api/workspaces/${me.data!.workspaceId}`, { method: 'PUT', json: { name: (document.getElementById('workspace-name') as HTMLInputElement).value } })
+              setSaved((v) => ({ ...v, workspace: Date.now() }))
+              me.reload()
+            }}
+          >
+            Rename
+          </button>
+        </div>
+        <p className="muted small" style={{ marginBottom: 0 }}>
+          A new site's host is filled in from its first real traffic. You can also set it here, so the Setup page shows your own address.
+        </p>
+      </div>
+
       <div className="card" id="sites">
-        <h2>Sites and ingest keys</h2>
+        <h2>
+          Sites and ingest keys <Saved at={saved.sites} />
+        </h2>
         <p className="muted small" style={{ marginTop: 0 }}>
           Each site sends events with its own key to <span className="mono">{me.data.ingestUrl}</span>.
         </p>
@@ -76,10 +100,25 @@ export const Settings = () => {
           <tbody>
             {me.data.sites.map((s) => (
               <tr key={s.id}>
-                <td>{s.name}</td>
-                <td className="mono small">{s.host}</td>
+                <td>
+                  <input type="text" defaultValue={s.name} aria-label="Site name" id={`site-name-${s.id}`} style={{ width: 140 }} />
+                </td>
+                <td>
+                  <input type="text" defaultValue={s.host} aria-label="Host" id={`site-host-${s.id}`} className="mono" style={{ width: 200 }} />
+                </td>
                 <td className="mono small">{s.ingestKey}</td>
-                <td className="right">
+                <td className="right" style={{ whiteSpace: 'nowrap' }}>
+                  <button
+                    className="btn"
+                    onClick={async () => {
+                      const value = (id: string) => (document.getElementById(id) as HTMLInputElement).value
+                      await api(`/api/sites/${s.id}`, { method: 'PUT', json: { name: value(`site-name-${s.id}`), host: value(`site-host-${s.id}`) } })
+                      setSaved((v) => ({ ...v, sites: Date.now() }))
+                      me.reload()
+                    }}
+                  >
+                    Save
+                  </button>{' '}
                   <button
                     className="btn danger"
                     onClick={async () => {
@@ -253,7 +292,7 @@ export const Settings = () => {
           </label>
           <label className="field">
             Currency
-            <input type="text" value={draft.currency} onChange={(e) => setDraft({ ...draft, currency: e.target.value })} style={{ width: 80 }} />
+            <input type="text" value={draft.currency} placeholder="From payments" onChange={(e) => setDraft({ ...draft, currency: e.target.value })} style={{ width: 120 }} />
           </label>
         </div>
         <p />

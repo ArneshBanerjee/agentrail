@@ -28,7 +28,8 @@ export const DEFAULT_SETTINGS: WorkspaceSettings = {
   funnel: [...DEFAULT_FUNNEL],
   conversionStep: DEFAULT_CONVERSION_STEP,
   intents: [],
-  currency: 'usd',
+  // Empty means "use the currency payments arrive in". See currencyOf in analysis.ts.
+  currency: '',
   llm: {},
   github: {},
   stripe: {},
@@ -147,6 +148,18 @@ export class Store {
   siteByKey(key: string): Site | undefined {
     const r = this.db.prepare('SELECT * FROM sites WHERE ingest_key = ?').get(key)
     return r ? this.toSite(r) : undefined
+  }
+
+  updateSite(workspaceId: string, siteId: string, patch: { name?: string; host?: string }): Site | undefined {
+    const site = this.sites(workspaceId).find((s) => s.id === siteId)
+    if (!site) return undefined
+    const next = { ...site, ...(patch.name ? { name: patch.name } : {}), ...(patch.host ? { host: patch.host } : {}) }
+    this.db.prepare('UPDATE sites SET name = ?, host = ? WHERE id = ?').run(next.name, next.host, site.id)
+    return next
+  }
+
+  renameWorkspace(workspaceId: string, name: string): void {
+    this.db.prepare('UPDATE workspaces SET name = ? WHERE id = ?').run(name, workspaceId)
   }
 
   deleteSite(workspaceId: string, siteId: string): void {

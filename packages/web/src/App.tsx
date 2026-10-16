@@ -174,7 +174,7 @@ export const App = () => {
           <span className="muted">{demoBusy ? 'Loading demo…' : 'Demo'}</span>
         </label>
         <a className="faint small" href="https://github.com/ArneshBanerjee/agentrail" target="_blank" rel="noreferrer" style={{ padding: '4px 8px' }}>
-          v0.1 · open source · MIT
+          {me.data?.version ? `v${me.data.version} · ` : ''}open source · MIT
         </a>
       </aside>
       <div className="main">

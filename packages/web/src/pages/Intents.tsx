@@ -4,7 +4,7 @@ import type { IntentGroup } from '../types.ts'
 
 export const Intents = () => {
   const [days] = useDays()
-  const { data, error } = useApi<{ withIntent: number; total: number; intents: IntentGroup[] }>(`/api/intents?days=${days}`)
+  const { data, error } = useApi<{ withIntent: number; total: number; intents: IntentGroup[]; currency: string }>(`/api/intents?days=${days}`)
   if (error) return <ErrorBox error={error} />
   if (!data) return <Loading />
   const top = Math.max(...data.intents.map((i) => i.sessions), 1)
@@ -54,7 +54,7 @@ export const Intents = () => {
               </div>
               <div>
                 <div className="faint small">Revenue</div>
-                <div className="bold">{fmt.money(i.revenue, 'usd', true)}</div>
+                <div className="bold">{fmt.money(i.revenue, data.currency, true)}</div>
               </div>
             </div>
             <div className="stack" style={{ marginTop: 12 }}>

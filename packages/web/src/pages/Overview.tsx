@@ -90,7 +90,8 @@ export const Overview = () => {
             {biggest ? (
               <>
                 {biggestLive ? <span className="islive">live · </span> : null}
-                {fmt.n(biggest.sessionsLost)} sessions · {days === 1 ? '24 hours' : `${days} days`}
+                {/* A problem agents got past still matters, so it shows how many hit it rather than "0". */}
+                {biggest.sessionsLost > 0 ? `${fmt.n(biggest.sessionsLost)} sessions` : `${fmt.n(biggest.sessionsAffected)} hit it`} · {days === 1 ? '24 hours' : `${days} days`}
               </>
             ) : (
               'No blockers found'
@@ -138,7 +139,7 @@ export const Overview = () => {
                   <div style={{ minWidth: 0 }}>
                     <div className="bold">{f.title}</div>
                     <div className="muted small">
-                      {fmt.n(f.sessionsLost)} sessions lost{f.beforeStep ? ` · before ${lowerFirst(s.funnelSteps.find((x) => x.id === f.beforeStep)?.label ?? f.beforeStep)}` : ''}
+                      {f.sessionsLost > 0 ? `${fmt.n(f.sessionsLost)} sessions lost` : `${fmt.n(f.sessionsAffected)} hit it and got past`}{f.sessionsLost > 0 && f.beforeStep ? ` · before ${lowerFirst(s.funnelSteps.find((x) => x.id === f.beforeStep)?.label ?? f.beforeStep)}` : ''}
                     </div>
                   </div>
                   <button className="btn" onClick={() => setOpen(f.key)}>

@@ -123,3 +123,34 @@ test('the demo switch makes the demo workspace once', async () => {
   expect(again.status).toBe(200)
   expect(store.workspaces().filter((w) => w.name === 'Ledgerly (demo)')).toHaveLength(1)
 })
+
+test('with no currency set, the payments decide it', async () => {
+  const { send, get, app } = setup()
+  await send([
+    { id: 'c1', ts: T0, source: 'http', kind: 'request', path: '/docs', status: 200, userAgent: CODEX, ip: '203.0.113.20' },
+    { id: 'c2', ts: T0 + 1000, source: 'track', kind: 'payment', amount: 9900, currency: 'EUR', userAgent: CODEX, ip: '203.0.113.20' },
+  ])
+  expect((await get('/api/summary?days=7')).body.currency).toBe('eur')
+  expect((await get('/api/revenue?days=7')).body.currency).toBe('eur')
+  await app.request('/api/settings', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ currency: 'INR' }) })
+  expect((await get('/api/summary?days=7')).body.currency).toBe('inr')
+})
+
+test('a site and a workspace can be renamed, and a site learns its host from real traffic', async () => {
+  const { app, site, workspace, send, store } = setup()
+  const put = (path: string, body: unknown) => app.request(path, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  await send([{ id: 'h1', ts: T0, source: 'http', kind: 'request', host: 'localhost:3000', path: '/docs', status: 200, userAgent: CODEX }])
+  expect(store.sites(workspace.id)[0]!.host).toBe('localhost')
+  await send([{ id: 'h2', ts: T0, source: 'http', kind: 'request', host: 'docs.acme.dev', path: '/docs', status: 200, userAgent: CODEX }])
+  expect(store.sites(workspace.id)[0]!.host).toBe('docs.acme.dev')
+  expect((await put(`/api/sites/${site.id}`, { name: 'Docs', host: 'https://docs.acme.com/path' })).status).toBe(200)
+  expect(store.sites(workspace.id)[0]).toMatchObject({ name: 'Docs', host: 'docs.acme.com' })
+  expect((await put(`/api/workspaces/${workspace.id}`, { name: 'Acme' })).status).toBe(200)
+  expect(store.workspace(workspace.id)!.name).toBe('Acme')
+  expect((await put(`/api/workspaces/${workspace.id}`, { name: ' ' })).status).toBe(400)
+})
+
+test('the version comes from the package', async () => {
+  const { get } = setup()
+  expect((await get('/api/me')).body.version).toMatch(/^\d+\.\d+\.\d+$/)
+})

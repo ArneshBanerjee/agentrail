@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { attribute, breakdown, byAgent, byDiscovery, byLandingPage, bySurface, groupIntents, type StoredEvent } from '@agentrail/core'
-import { Analyzer, summarize, type Window } from './analysis.ts'
+import { Analyzer, currencyOf, summarize, type Window } from './analysis.ts'
 import type { Config } from './config.ts'
 import { ingest, type IngestDeps, type Verifier } from './ingest.ts'
 import type { Store, WorkspaceSettings } from './store.ts'
@@ -44,6 +44,14 @@ export type AppContext = {
 
 const DAY = 86_400_000
 
+const VERSION = (() => {
+  try {
+    return (JSON.parse(readFileSync(join(import.meta.dirname, '../../../package.json'), 'utf8')) as { version?: string }).version ?? 'dev'
+  } catch {
+    return 'dev'
+  }
+})()
+
 /** Secrets are write-only. The dashboard learns that a key is set, never what it is. */
 export const maskSettings = (s: WorkspaceSettings) => ({
   ...s,
@@ -59,7 +67,13 @@ export const createApp = (deps: AppDeps) => {
   const live = new EventEmitter()
   live.setMaxListeners(1000)
 
-  const onStored = (site: { workspaceId: string }, events: readonly StoredEvent[]) => {
+  const onStored = (site: { id: string; workspaceId: string; host: string }, events: readonly StoredEvent[]) => {
+    // A new site starts as "localhost". The first real traffic says where it lives, so the Setup
+    // page and test runs use the real host without anyone typing it.
+    if (site.host === 'localhost') {
+      const real = events.find((e) => e.host && !/^(localhost|127\.0\.0\.1)(:|$)/.test(e.host))?.host
+      if (real) store.updateSite(site.workspaceId, site.id, { host: real })
+    }
     for (const e of events) {
       if (e.runId) continue
       const a = attribute({ userAgent: e.userAgent, mcpClient: e.mcpClient, verifiedOperator: e.verifiedOperator, accept: e.accept, path: e.path })
@@ -127,6 +141,7 @@ export const createApp = (deps: AppDeps) => {
       workspaceId,
       sites: store.sites(workspaceId),
       ingestUrl: `${config.publicUrl}/v1/events`,
+      version: VERSION,
     })
   })
 
@@ -208,7 +223,7 @@ export const createApp = (deps: AppDeps) => {
         discovery: breakdown(mine, byDiscovery, step).slice(0, 5),
       }
     })
-    return c.json({ agents: rows, surfaces: breakdown(a.sessions, bySurface, step) })
+    return c.json({ agents: rows, surfaces: breakdown(a.sessions, bySurface, step), currency: currencyOf(store.settings(workspaceId).currency, a.sessions) })
   })
 
   app.get('/api/intents', (c) => {
@@ -216,7 +231,7 @@ export const createApp = (deps: AppDeps) => {
     const a = analyzer.analyze(workspaceId, windowOf(c))
     const settings = store.settings(workspaceId)
     const groups = groupIntents(a.sessions, { definitions: settings.intents, conversionStep: settings.conversionStep, labels: settings.intentLabels })
-    return c.json({ withIntent: a.sessions.filter((s) => s.intent).length, total: a.sessions.length, intents: groups })
+    return c.json({ withIntent: a.sessions.filter((s) => s.intent).length, total: a.sessions.length, intents: groups, currency: currencyOf(settings.currency, a.sessions) })
   })
 
   app.get('/api/revenue', (c) => {
@@ -228,7 +243,7 @@ export const createApp = (deps: AppDeps) => {
     const intentOf = new Map<string, { key: string; label: string }>()
     for (const g of groups) for (const id of g.sessionIds) intentOf.set(id, { key: g.id, label: g.label })
     return c.json({
-      currency: settings.currency,
+      currency: currencyOf(settings.currency, a.sessions),
       total: a.sessions.reduce((sum, s) => sum + s.revenue, 0),
       sessions: a.sessions.length,
       converted: a.sessions.filter((s) => step in s.reached).length,
@@ -257,7 +272,8 @@ export const createApp = (deps: AppDeps) => {
       ...(body.funnel ? { funnel: body.funnel } : {}),
       ...(body.conversionStep ? { conversionStep: body.conversionStep } : {}),
       ...(body.intents ? { intents: body.intents } : {}),
-      ...(body.currency ? { currency: body.currency } : {}),
+      // An empty currency means "the one payments arrive in", so it can be set back to empty.
+      ...(body.currency !== undefined ? { currency: String(body.currency).trim().toLowerCase() } : {}),
       llm: keep(body.llm, current.llm, 'apiKey'),
       github: keep(body.github, current.github, 'token'),
       stripe: keep(body.stripe, current.stripe, 'webhookSecret'),
@@ -273,6 +289,21 @@ export const createApp = (deps: AppDeps) => {
     const body = (await c.req.json()) as { name?: string; host?: string }
     if (!body.name || !body.host) return c.json({ error: 'name and host are required' }, 400)
     return c.json(store.createSite(workspaceOf(c), body.name, body.host), 201)
+  })
+
+  app.put('/api/sites/:id', async (c) => {
+    const body = (await c.req.json()) as { name?: string; host?: string }
+    const host = body.host?.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+    const site = store.updateSite(workspaceOf(c), c.req.param('id'), { ...(body.name?.trim() ? { name: body.name.trim() } : {}), ...(host ? { host } : {}) })
+    return site ? c.json(site) : c.json({ error: 'not found' }, 404)
+  })
+
+  app.put('/api/workspaces/:id', async (c) => {
+    const body = (await c.req.json()) as { name?: string }
+    const workspaceId = c.req.param('id')
+    if (!body.name?.trim() || !store.workspace(workspaceId)) return c.json({ error: 'name is required' }, 400)
+    store.renameWorkspace(workspaceId, body.name.trim())
+    return c.json(store.workspace(workspaceId))
   })
 
   app.delete('/api/sites/:id', (c) => {

@@ -3,7 +3,7 @@ import type { Attribution, Blocker, BreakdownRow, Discovery, FixCandidate, Funne
 export type { Attribution, Blocker, BreakdownRow, FixCandidate, FunnelRow, IntentGroup, Overview, TimelineItem }
 
 export type Site = { id: string; workspaceId: string; name: string; host: string; ingestKey: string }
-export type Me = { workspaces: { id: string; name: string }[]; workspaceId: string; sites: Site[]; ingestUrl: string }
+export type Me = { workspaces: { id: string; name: string }[]; workspaceId: string; sites: Site[]; ingestUrl: string; version?: string }
 
 export type FixRecord = {
   key: string

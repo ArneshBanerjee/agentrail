@@ -63,6 +63,21 @@ says how it was checked:
 | A version label and a workspace switcher | Live | Sidebar |
 | A button to hide the sidebar | Live | Header |
 
+## A new install with real data
+
+Checked on 2026-10-16 on an empty data folder, with demo data off. Nothing on a page comes from the
+demo workspace.
+
+| Check | Result |
+|---|---|
+| Empty workspace | Every page renders with no data and no console errors |
+| Currency | Taken from Settings, else from the payments, else USD. Shown the same on Overview, Revenue, Agents and Intents |
+| Workspace and site names | Renamed in Settings. A site learns its host from its first non-local request, and Setup uses that host |
+| Version label | Read from the package, not hard coded |
+| Before the fix | Plain Claude Code on Ledgerly: live session, named, task through the docs finder, reached First payment, 401s marked |
+| The fix | Claude Code drafted the auth fix with no API key. Confirm made it live; agents got the corrected page and people the old one |
+| After the fix | A new plain Claude Code run read the corrected `/docs/api-keys` and its first `POST /v1/meters` returned 200, with no 401. 18 steps, 33 s |
+
 ## Gaps
 
 | Gap | Note |

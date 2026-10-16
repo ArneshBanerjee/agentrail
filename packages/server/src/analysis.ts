@@ -62,6 +62,17 @@ export class Analyzer {
   }
 }
 
+/**
+ * The currency to show: the one set in Settings, else the one most payments arrive in, else USD.
+ * A product that charges in euros should not see dollar signs because nobody changed a setting.
+ */
+export const currencyOf = (settingsCurrency: string, sessions: readonly Session[]): string => {
+  if (settingsCurrency) return settingsCurrency
+  const counts = new Map<string, number>()
+  for (const s of sessions) if (s.currency) counts.set(s.currency.toLowerCase(), (counts.get(s.currency.toLowerCase()) ?? 0) + 1)
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'usd'
+}
+
 export const summarize = (store: Store, workspaceId: string, a: Analysis, now: number) => {
   const settings = store.settings(workspaceId)
   const step = settings.conversionStep
@@ -80,6 +91,6 @@ export const summarize = (store: Store, workspaceId: string, a: Analysis, now: n
     intents,
     fixes,
     pages: breakdown(a.sessions, byLandingPage, step),
-    currency: settings.currency,
+    currency: currencyOf(settings.currency, a.sessions),
   }
 }
