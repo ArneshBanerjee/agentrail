@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agentrail · See how AI agents use your product</title>
+    <meta name="description" content="Open-source analytics for AI agents. See which agents use your product, what they came to do, where they get stuck, and the fix." />
+    <meta property="og:title" content="Agentrail" />
+    <meta property="og:description" content="See how AI agents use your product. Open source and self-hosted." />
+    <meta property="og:image" content="/assets/overview.png" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #fbfbfa;
+        --panel: #ffffff;
+        --line: #e7e6e2;
+        --text: #18181a;
+        --muted: #64635e;
+        --accent: #0f766e;
+        --accent-soft: #e3f2f0;
+        --code: #f3f3f1;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f0f0e;
+          --panel: #171716;
+          --line: #2a2a27;
+          --text: #eceae4;
+          --muted: #a09f98;
+          --accent: #2dd4bf;
+          --accent-soft: #10302d;
+          --code: #1c1c1a;
+          color-scheme: dark;
+        }
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
+      a { color: inherit; text-decoration: none; }
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+      nav { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+      nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 60px; }
+      .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 17px; }
+      .brand img { width: 26px; height: 26px; }
+      .links { display: flex; align-items: center; gap: 22px; font-size: 14.5px; color: var(--muted); }
+      .links a:hover { color: var(--text); }
+
+      .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-weight: 600; font-size: 15px; border: 1px solid var(--line); background: var(--panel); color: var(--text); transition: transform 0.15s, border-color 0.15s; }
+      .btn:hover { transform: translateY(-1px); border-color: var(--accent); }
+      .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      @media (prefers-color-scheme: dark) { .btn.primary { color: #06201d; } }
+      .btn.small { padding: 7px 14px; font-size: 14px; }
+      .btn svg { width: 18px; height: 18px; }
+
+      header.hero { padding: 88px 0 48px; text-align: center; }
+      .tag { display: inline-block; padding: 4px 12px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; margin-bottom: 22px; }
+      h1 { font-size: clamp(36px, 6vw, 60px); line-height: 1.07; letter-spacing: -0.035em; margin: 0 auto 20px; max-width: 760px; }
+      .lead { font-size: clamp(17px, 2.2vw, 20px); color: var(--muted); max-width: 640px; margin: 0 auto 32px; }
+      .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+      .shot { margin: 56px auto 0; border-radius: 14px; border: 1px solid var(--line); overflow: hidden; box-shadow: 0 30px 80px -30px rgb(0 0 0 / 0.35); background: #111; }
+      .shot img { display: block; width: 100%; height: auto; }
+
+      section { padding: 80px 0; }
+      h2 { font-size: clamp(26px, 3.6vw, 36px); letter-spacing: -0.025em; margin: 0 0 12px; line-height: 1.15; }
+      .sub { color: var(--muted); margin: 0 0 40px; max-width: 620px; }
+
+      .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 24px; }
+      .card h3 { margin: 0 0 6px; font-size: 17px; }
+      .card p { margin: 0; color: var(--muted); font-size: 15px; }
+      .icon { width: 36px; height: 36px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; margin-bottom: 14px; }
+      .icon svg { width: 19px; height: 19px; }
+
+      .split { display: grid; grid-template-columns: 1fr 1.25fr; gap: 48px; align-items: center; }
+      .steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+      .steps li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; color: var(--muted); }
+      .steps b { color: var(--text); font-weight: 600; }
+      .num { width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 700; display: grid; place-items: center; }
+
+      pre { background: var(--code); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; margin: 0; font: 14px/1.75 'JetBrains Mono', ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+      pre .c { color: var(--muted); }
+      .start { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+
+      .band { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--panel); }
+      .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; text-align: center; }
+      .facts b { display: block; font-size: 18px; margin-bottom: 4px; }
+      .facts span { color: var(--muted); font-size: 15px; }
+
+      footer { padding: 36px 0 48px; color: var(--muted); font-size: 14px; }
+      footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+
+      @media (max-width: 820px) {
+        .grid, .split, .start, .facts { grid-template-columns: 1fr; }
+        .links .hide { display: none; }
+        header.hero { padding-top: 56px; }
+        section { padding: 56px 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <div class="wrap">
+        <a class="brand" href="/"><img src="/favicon.svg" alt="" /> Agentrail</a>
+        <div class="links">
+          <a class="hide" href="#features">Features</a>
+          <a class="hide" href="#start">Get started</a>
+          <a class="btn small" href="https://github.com/ArneshBanerjee/agentrail">
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            GitHub
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <div class="wrap">
+        <span class="tag">Free and open source</span>
+        <h1>See how AI agents use your product.</h1>
+        <p class="lead">Claude Code, Codex and Cursor now read docs, sign up and pay for people. Normal analytics miss them. Agentrail shows each agent, what it came to do, and where it gets stuck.</p>
+        <div class="cta">
+          <a class="btn primary" href="https://github.com/ArneshBanerjee/agentrail">View on GitHub</a>
+          <a class="btn" href="#start">Get started</a>
+        </div>
+        <div class="shot"><img src="/assets/overview.png" alt="The Agentrail dashboard: agent traffic, conversion, main intent, biggest fix and a funnel by agent" width="800" height="500" /></div>
+      </div>
+    </header>
+
+    <section id="features">
+      <div class="wrap">
+        <h2>Everything an agent does, in one place</h2>
+        <p class="sub">Agents never run page scripts. Agentrail collects on your server, so it sees what other tools cannot.</p>
+        <div class="grid">
+          <div class="card">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>
+            <h3>Every agent, named</h3>
+            <p>See each agent the moment it arrives, with the evidence for its name: verified, declared or inferred.</p>
+          </div>
+          <div class="card">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+            <h3>The task, in their words</h3>
+            <p>A docs finder answers agents with the right pages. The question they ask is the task the person gave them.</p>
+          </div>
+          <div class="card">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg></div>
+            <h3>Every step, and where it broke</h3>
+            <p>Follow each journey from the first page read to the first payment, and see the exact call that stopped it.</p>
+          </div>
+          <div class="card">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+            <h3>Fixes, live in one click</h3>
+            <p>The biggest blockers are ranked by revenue and drafted for you. Confirm, and agents get the corrected page at once.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap split">
+        <div>
+          <h2>Works with plain Claude Code</h2>
+          <p class="sub">Nothing to install in the agent. Ask Claude Code to do a normal task with your product, and watch it happen.</p>
+          <ol class="steps">
+            <li><span class="num">1</span><span><b>It arrives.</b> The session appears live, with the agent's name and its task.</span></li>
+            <li><span class="num">2</span><span><b>It gets stuck.</b> A wrong header in your docs fails its first API call.</span></li>
+            <li><span class="num">3</span><span><b>You fix it.</b> The corrected page is drafted for you. One click, and the next agent gets through.</span></li>
+          </ol>
+        </div>
+        <div class="shot" style="margin: 0"><img src="/assets/session.png" alt="One agent session: the task, a step tracker, and every step grouped by phase" width="800" height="505" loading="lazy" /></div>
+      </div>
+    </section>
+
+    <div class="band">
+      <section style="padding: 48px 0">
+        <div class="wrap facts">
+          <div><b>Self-hosted</b><span>One server and one SQLite file. Runs with Node or Docker.</span></div>
+          <div><b>Private by default</b><span>People's traffic never leaves your server. Personal data is removed before it is stored.</span></div>
+          <div><b>No API key needed</b><span>Fixes are drafted with Claude Code on your machine, or any Anthropic, OpenAI or Gemini key.</span></div>
+        </div>
+      </section>
+    </div>
+
+    <section id="start">
+      <div class="wrap start">
+        <div>
+          <h2>Running in a minute</h2>
+          <p class="sub" style="margin-bottom: 24px">You need Node.js 22.18 or newer. Then open localhost:4318 and turn on Demo to look around.</p>
+          <a class="btn primary" href="https://github.com/ArneshBanerjee/agentrail#get-started">Read the full steps</a>
+        </div>
+        <pre><span class="c"># get the code</span>
+git clone https://github.com/ArneshBanerjee/agentrail.git
+cd agentrail
+
+<span class="c"># install and start</span>
+npm install
+npm start</pre>
+      </div>
+    </section>
+
+    <footer>
+      <div class="wrap">
+        <span>Agentrail · MIT license</span>
+        <a href="https://github.com/ArneshBanerjee/agentrail">github.com/ArneshBanerjee/agentrail</a>
+      </div>
+    </footer>
+  </body>
+</html>

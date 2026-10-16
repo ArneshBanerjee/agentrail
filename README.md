@@ -14,7 +14,7 @@ server and shows you:
 - conversion and revenue by agent and by task;
 - the fixes that would help most, drafted for you, live after one click.
 
-Free, open source and self-hosted.
+Free, open source and self-hosted. Website: [agentrail-henna.vercel.app](https://agentrail-henna.vercel.app)
 
 ![Overview](docs/assets/overview.png)
 
